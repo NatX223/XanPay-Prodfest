@@ -135,3 +135,42 @@ app.post("/login", verifyFirebaseToken, async (req, res) => {
     }
 });
 
+app.post("createInvoice", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.split("Bearer ")[1];
+  
+    if (!token) return res.status(401).json({ error: "No token" });
+  
+    // Verify token
+    const decoded = await auth.verifyIdToken(token);
+  
+    const uid = decoded.uid;
+  
+    const merchantRef = db.collection("merchant").doc(uid);
+    const merchantDoc = await merchantRef.get();
+
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    const merchant = merchantDoc.data();    
+
+    // Create invoice for this user
+    const invoice = {
+      businessName: merchant.businessName,
+      businessImage: merchant.businessImage,
+      product: req.body.product,
+      quantity: req.body.quantity,
+      createdAt: Date.now(),
+      validUntil: Date.now() + 7 * 24 * 60 * 60 * 1000, // optional 7-day validity
+    };
+  
+    await db.collection("merchantInvoice").add(invoice);
+  
+    res.json({ success: true, invoice });
+  } catch (err) {
+    console.error(err);
+    res.status(401).json({ error: "Unauthorized" });
+  }
+});
