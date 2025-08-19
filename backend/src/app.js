@@ -166,7 +166,45 @@ app.post("createInvoice", async (req, res) => {
       validUntil: Date.now() + 7 * 24 * 60 * 60 * 1000, // optional 7-day validity
     };
   
-    await db.collection("merchantInvoice").add(invoice);
+    await db.collection("merchants").doc(uid).collection("invoices").add(invoice);
+  
+    res.json({ success: true, invoice });
+  } catch (err) {
+    console.error(err);
+    res.status(401).json({ error: "Unauthorized" });
+  }
+});
+
+app.post("addProduct", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.split("Bearer ")[1];
+  
+    if (!token) return res.status(401).json({ error: "No token" });
+  
+    // Verify token
+    const decoded = await auth.verifyIdToken(token);
+  
+    const uid = decoded.uid;
+  
+    const merchantRef = db.collection("merchant").doc(uid);
+    const merchantDoc = await merchantRef.get();
+
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    // add product
+    const product = {
+      productName: req.body.businessName,
+      productImage: req.body.productImage,
+      quantity: req.body.quantity,
+      price: req.body.price,
+      currency: req.body.currency,
+      createdAt: Date.now(),
+    };
+  
+    await db.collection("merchants").doc(uid).collection("products").add(product);
   
     res.json({ success: true, invoice });
   } catch (err) {
