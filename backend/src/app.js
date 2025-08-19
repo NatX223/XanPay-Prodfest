@@ -7,7 +7,7 @@ const routes = require('./routes/index');
 // const { MailerSend, Recipient, EmailParams, Sender } = require("mailersend");
 const { ethers } = require("ethers");
 const { db, auth } = require('./utils/firebase');
-// const { verifyFirebaseToken } = require('./middleware/auth');
+const { verifyFirebaseToken } = require('./middleware/auth');
 
 dotenv.config();
 
@@ -84,3 +84,54 @@ app.post("/createAccount", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.post("/login", verifyFirebaseToken, async (req, res) => {
+    try {
+      const uuid = req.uid;
+  
+      // fetch merchant document
+      const merchantRef = db.collection("merchant").doc(uuid);
+      const merchantDoc = await merchantRef.get();
+  
+      if (!merchantDoc.exists) {
+        return res.status(404).json({ error: "Merchant not found" });
+      }
+  
+      const merchant = merchantDoc.data();
+  
+      // fetch blockchain accounts & balances
+      const accounts = await client.getAccounts({ address: merchant.userAddress });
+      if (!accounts || accounts.length === 0) {
+        return res.status(400).json({ error: "No accounts found for user" });
+      }
+  
+      const balance = await client.getTokenBalances({
+        account: accounts[0],
+        chain,
+        token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+      });
+  
+      const userBalance = balance.length
+        ? ethers.formatUnits(balance[0].value, balance[0].decimals)
+        : "0";
+  
+      // construct response object
+      const businessDetails = {
+        businessName: merchant.businessName || null,
+        businessImage: merchant.businessImage || null,
+        userBalance,
+      };
+  
+      return res.json({
+        message: "Business Returned",
+        business: businessDetails,
+      });
+    } catch (error) {
+      console.error("Error in /login:", error);
+      return res.status(500).json({
+        error: "Internal server error",
+        details: error.message,
+      });
+    }
+});
+

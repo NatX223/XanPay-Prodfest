@@ -1,6 +1,6 @@
 const { auth } = require('../utils/firebase');
 
-export async function verifyFirebaseToken(req, res, next) {
+async function verifyFirebaseToken(req, res, next) {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.split(" ")[1];
 
@@ -14,3 +14,5 @@ export async function verifyFirebaseToken(req, res, next) {
       return res.status(401).send("Invalid token");
     }
 }
+
+module.exports = {verifyFirebaseToken};
