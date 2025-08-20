@@ -551,9 +551,7 @@ app.post('/webhook/deposit', async (req, res) => {
         console.error('Invoice payment failed:', result.error);
       }
     } else {
-      // Process as regular deposit - add to transaction history
-      const transactionId = uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase();
-      await db.collection("merchants").doc(merchantId).collection("transactions").doc(transactionId).set({
+      await db.collection("merchants").doc(merchantId).collection("transactions").add({
         type: "Deposit",
         amount: parseFloat(amount),
         currency: currency,
@@ -569,5 +567,53 @@ app.post('/webhook/deposit', async (req, res) => {
   } catch (err) {
     console.error('Error handling webhook:', err);
     res.sendStatus(500);
+  }
+});
+
+app.get('/transactions', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.split("Bearer ")[1];
+
+    if (!token) return res.status(401).json({ error: "No token" });
+
+    // Verify token
+    const decoded = await auth.verifyIdToken(token);
+    const uid = decoded.uid;
+
+    // Verify merchant exists
+    const merchantRef = db.collection("merchants").doc(uid);
+    const merchantDoc = await merchantRef.get();
+
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    // Get all transactions for this merchant
+    const transactionsSnapshot = await db.collection("merchants").doc(uid).collection("transactions").get();
+
+    if (transactionsSnapshot.empty) {
+      return res.json({
+        success: true,
+        message: "No transactions found",
+        transactions: []
+      });
+    }
+
+    // Map transactions with document IDs
+    const transactions = transactionsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({
+      success: true,
+      message: "Transactions retrieved successfully",
+      count: transactions.length,
+      transactions
+    });
+  } catch (err) {
+    console.error("Error getting transactions:", err);
+    res.status(500).json({ error: "Failed to retrieve transactions" });
   }
 });
