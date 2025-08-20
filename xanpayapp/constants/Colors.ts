@@ -49,5 +49,5 @@ export const WelcomeColors = {
   glassReflection: 'rgba(255, 255, 255, 0.02)',
   glassShadow: 'rgba(0, 0, 0, 0.5)',
   buttonBlack: '#000000',
-  buttonGreen: '#10B981',
+  buttonPrimary: '#8a63d2',
 };

@@ -1,16 +1,15 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import 'dotenv/config';
 
-// Firebase config using environment variables
+// Your Firebase config - replace with your actual config
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID,
-  measurementId: process.env.FIREBASE_MEASUREMENT_ID
+  apiKey: "AIzaSyA319G2oj_5dO6lm93QhExYRQcyx_MhaN0",
+  authDomain: "flaresec-1dfea.firebaseapp.com",
+  projectId: "flaresec-1dfea",
+  storageBucket: "flaresec-1dfea.firebasestorage.app",
+  messagingSenderId: "305151061105",
+  appId: "1:305151061105:web:f05d04435fe9e389183fd0",
+  measurementId: "G-FR7XCE7GC6"
 };
 
 // Initialize Firebase

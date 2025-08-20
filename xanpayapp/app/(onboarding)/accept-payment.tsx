@@ -3,13 +3,15 @@ import { StyleSheet, View, SafeAreaView, Text } from "react-native";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import { ContinueButton } from "@/components/welcome";
 import { router } from "expo-router";
+import { Image } from "expo-image";
+import Animated from "react-native-reanimated";
 
 export default function WelcomeScreen() {
   const { updateStep } = useOnboarding();
 
   const handleContinue = () => {
-    updateStep(2);
-    router.push("/(onboarding)/accept-payment");
+    updateStep(3);
+    router.push("/(onboarding)/business-management");
   };
 
   return (
@@ -17,21 +19,24 @@ export default function WelcomeScreen() {
       {/* XanPay Logo - Centered */}
       <View style={styles.content}>
         <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>
-            <Text style={styles.xanText}>Xan</Text>
-            <Text style={styles.payText}>Pay</Text>
-          </Text>
+          <Animated.View style={styles.imageContainer}>
+            <Image
+              source={require("@/assets/images/accept_payment.png")}
+              style={styles.centerImage}
+              contentFit="contain"
+            />
+          </Animated.View>
           <Text style={styles.subtitleText}>
-            Manage your business with ease
+            Accept crypto payments, settle to fiat and do more with cNGN
           </Text>
         </View>
         {/* Progress Indicator */}
         <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
+          <View style={styles.progressBar}>
+            <View style={styles.progressStep} />
             <View style={[styles.progressStep, styles.activeStep]} />
             <View style={styles.progressStep} />
-            <View style={styles.progressStep} />
-            </View>
+          </View>
         </View>
         <View style={styles.buttonContainer}>
           <ContinueButton onPress={handleContinue} />
@@ -68,6 +73,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
     fontFamily: "Clash",
+  },
+  imageContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  centerImage: {
+    width: 200,
+    height: 200,
   },
   progressContainer: {
     paddingTop: 60,
