@@ -617,3 +617,82 @@ app.get('/transactions', async (req, res) => {
     res.status(500).json({ error: "Failed to retrieve transactions" });
   }
 });
+
+app.post('/withdrawCrypto', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.split("Bearer ")[1];
+
+    if (!token) return res.status(401).json({ error: "No token" });
+
+    // Verify token
+    const decoded = await auth.verifyIdToken(token);
+    const uid = decoded.uid;
+
+    // Verify merchant exists
+    const merchantRef = db.collection("merchants").doc(uid);
+    const merchantDoc = await merchantRef.get();
+    const merchantId = merchantDoc.id;
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    const merchant = merchantDoc.data();
+    const merchantAddress = merchant.userAddress;
+
+    const transactionId = uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase();
+
+    const options = {
+      method: "POST",
+      url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddress}/withdraw`,
+      headers: {
+        "x-api-key": process.env.BLOCKRADAR_API_KEY,
+        "Content-Type": "application/json",
+      },
+      data: {
+        assets: [
+          {
+            "address": req.body.recipient,
+            "amount": req.body.amount,
+            "id": "fa813091-a293-4828-a2ab-b1f6c22f194f",
+            "reference": transactionId
+          }
+        ]
+      },
+    };
+
+    const response = await axios(options);
+
+    if (response.status === 200) {
+      await db.collection("merchants").doc(merchantId).collection("transactions").doc(transactionId).set({
+        type: "Send",
+        amount: req.body.amount,
+        currency: "USDC",
+        createdAt: Date.now()
+      });
+      res.json({
+        success: true,
+        message: "Payment initiated successfully",
+        transactionId: transactionId
+      });
+    } else {
+      throw new Error(`Payment API returned status: ${response.status}`);
+    }
+
+  } catch (error) {
+    console.error("Error initiating payment:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to initiate payment",
+      details: error.message
+    });
+  }
+})
+
+app.post('/withdrawFiat', async (req, res) => {
+  try {
+    
+  } catch (error) {
+    
+  }
+})
