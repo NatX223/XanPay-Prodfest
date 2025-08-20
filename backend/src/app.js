@@ -166,9 +166,12 @@ app.post("/createAccount", async (req, res) => {
       userAddress,
     });
 
+    const token = await auth.createCustomToken(userRecord.uid);
+
     console.log("Successfully created new user:", userRecord.uid);
     res.status(201).json({
-      message: "Merchant created successfully"
+      message: "Merchant created successfully",
+      token
     });
   } catch (error) {
     console.error("Error creating user:", error);

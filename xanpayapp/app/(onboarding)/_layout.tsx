@@ -13,7 +13,8 @@ export default function OnboardingLayout() {
       >
         <Stack.Screen name="welcome" />
         <Stack.Screen name="accept-payment" />
-        {/* <Stack.Screen name="account-setup" /> */}
+        <Stack.Screen name="business-management" />
+        <Stack.Screen name="account-setup" />
       </Stack>
     </OnboardingProvider>
   );

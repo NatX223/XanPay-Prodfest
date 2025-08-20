@@ -10,8 +10,8 @@ export default function WelcomeScreen() {
   const { updateStep } = useOnboarding();
 
   const handleContinue = () => {
-    updateStep(3);
-    router.push("/(onboarding)/business-management");
+    updateStep(4);
+    router.push("/(onboarding)/account-setup");
   };
 
   return (
@@ -21,21 +21,21 @@ export default function WelcomeScreen() {
         <View style={styles.logoContainer}>
           <Animated.View style={styles.imageContainer}>
             <Image
-              source={require("@/assets/images/accept_payment.png")}
+              source={require("@/assets/images/manage-business.png")}
               style={styles.centerImage}
               contentFit="contain"
             />
           </Animated.View>
           <Text style={styles.subtitleText}>
-            Accept crypto payments, settle to fiat and do more with cNGN
+            Manage inventory and products
           </Text>
         </View>
         {/* Progress Indicator */}
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
             <View style={styles.progressStep} />
-            <View style={[styles.progressStep, styles.activeStep]} />
             <View style={styles.progressStep} />
+            <View style={[styles.progressStep, styles.activeStep]} />
           </View>
         </View>
         <View style={styles.buttonContainer}>
