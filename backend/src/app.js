@@ -179,12 +179,21 @@ app.post("/createAccount", async (req, res) => {
   }
 });
 
-app.post("/login", verifyFirebaseToken, async (req, res) => {
+app.post("/login", async (req, res) => {
     try {
-      const uuid = req.uid;
+      const authHeader = req.headers.authorization || "";
+      const token = authHeader.split("Bearer ")[1];
+    
+      if (!token) return res.status(401).json({ error: "No token" });
+    
+      // Verify token
+      const decoded = await auth.verifyIdToken(token);
+    
+      const uid = decoded.uid;
+      const masterWalletId = process.env.MASTER_WALLET_ID;
   
       // fetch merchant document
-      const merchantRef = db.collection("merchants").doc(uuid);
+      const merchantRef = db.collection("merchants").doc(uid);
       const merchantDoc = await merchantRef.get();
   
       if (!merchantDoc.exists) {
@@ -192,28 +201,32 @@ app.post("/login", verifyFirebaseToken, async (req, res) => {
       }
   
       const merchant = merchantDoc.data();
+      const merchantAddress = merchant.userAddress;
   
-      // fetch blockchain accounts & balances
-      const accounts = await client.getAccounts({ address: merchant.userAddress });
-      if (!accounts || accounts.length === 0) {
-        return res.status(400).json({ error: "No accounts found for user" });
+      let userBalance = 0;
+      
+      const options = {
+        method: "GET",
+        url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddress}/balance`,
+        headers: {
+          "x-api-key": process.env.BLOCKRADAR_API_KEY
+        }
+      };
+  
+      const response = await axios(options);
+  
+      if (response.status === 200) {
+        userBalance = response.data?.data?.convertedBalance || 0;
+      } else {
+        throw new Error(`Payment API returned status: ${response.status}`);
       }
-  
-      const balance = await client.getTokenBalances({
-        account: accounts[0],
-        chain,
-        token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-      });
-  
-      const userBalance = balance.length
-        ? ethers.formatUnits(balance[0].value, balance[0].decimals)
-        : "0";
   
       // construct response object
       const businessDetails = {
         businessName: merchant.businessName || null,
         businessImage: merchant.businessImage || null,
-        userBalance,
+        userAddress: merchant.userAddress || null,
+        userBalance: userBalance
       };
   
       return res.json({
@@ -229,7 +242,7 @@ app.post("/login", verifyFirebaseToken, async (req, res) => {
     }
 });
 
-app.post("createInvoice", async (req, res) => {
+app.post("/createInvoice", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.split("Bearer ")[1];

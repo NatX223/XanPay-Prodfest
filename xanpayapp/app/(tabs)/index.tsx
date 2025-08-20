@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -8,62 +8,20 @@ import {
   Dimensions,
   Modal,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { Image } from "expo-image";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { OnboardingColors } from "@/constants/Colors";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { TransactionService, Transaction } from "@/services/businessService";
 import ReceiveModal from "@/components/modals/ReceiveModal";
 import SendModal from "@/components/modals/SendModal";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-
-interface Transaction {
-  id: string;
-  type: "Purchase" | "Deposit" | "Spend";
-  amount: string;
-  description: string;
-  date: string;
-}
-
-const mockTransactions: Transaction[] = [
-  {
-    id: "1",
-    type: "Deposit",
-    amount: "+$500.00",
-    description: "wallet Deposit",
-    date: "2 hours ago",
-  },
-  {
-    id: "2",
-    type: "Spend",
-    amount: "-$45.99",
-    description: "Salaries",
-    date: "12 july",
-  },
-  {
-    id: "3",
-    type: "Purchase",
-    amount: "+$129.99",
-    description: "Online Store",
-    date: "11 june",
-  },
-  {
-    id: "4",
-    type: "Deposit",
-    amount: "+$1,200.00",
-    description: "Salary",
-    date: "11 june",
-  },
-  {
-    id: "5",
-    type: "Spend",
-    amount: "-$25.50",
-    description: "Lunch",
-    date: "11 june",
-  },
-];
 
 const currencies = [
   { code: "USDC", symbol: "$", balance: "2,450.75" },
@@ -76,12 +34,42 @@ export default function HomeScreen() {
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  
+  const { businessDetails, isLoading, error, refreshBusinessDetails } = useBusiness();
+
+  // Fetch transactions when business details are loaded
+  useEffect(() => {
+    if (businessDetails) {
+      fetchTransactions();
+    }
+  }, [businessDetails]);
+
+  const fetchTransactions = async () => {
+    try {
+      setTransactionsLoading(true);
+      const userTransactions = await TransactionService.getUserTransactions();
+      setTransactions(userTransactions);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      refreshBusinessDetails(),
+      fetchTransactions()
+    ]);
+  };
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
       case "Deposit":
         return "arrow.down";
-      case "Spend":
+      case "Send":
         return "arrow.up.right";
       case "Purchase":
         return "cart";
@@ -94,13 +82,32 @@ export default function HomeScreen() {
     switch (type) {
       case "Deposit":
         return "#10B981";
-      case "Spend":
+      case "Send":
         return "#EF4444";
       case "Purchase":
         return "#F59E0B";
       default:
         return OnboardingColors.text;
     }
+  };
+
+  const formatTransactionDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) {
+      return 'Just now';
+    } else if (diffInHours < 24) {
+      return `${diffInHours} hours ago`;
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  };
+
+  const formatTransactionAmount = (amount: number, type: string) => {
+    const prefix = type === 'Deposit' || type === 'Purchase' ? '+' : '-';
+    return `${prefix}$${amount.toFixed(2)}`;
   };
 
   const renderTransaction = ({ item }: { item: Transaction }) => (
@@ -129,17 +136,17 @@ export default function HomeScreen() {
             style={styles.transactionInfo}
             darkColor={OnboardingColors.text}
           >
-            {`${item.date} • ${item.description}`}
+            {`${formatTransactionDate(item.createdAt)} • ${item.productName || item.note || 'Transaction'}`}
           </ThemedText>
         </View>
       </View>
       <ThemedText
         style={[
           styles.transactionAmount,
-          { color: "#010805" },
+          { color: getTransactionColor(item.type) },
         ]}
       >
-        {item.amount}
+        {formatTransactionAmount(item.amount, item.type)}
       </ThemedText>
     </View>
   );
@@ -154,13 +161,21 @@ export default function HomeScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           style={styles.scrollView}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoading || transactionsLoading}
+              onRefresh={handleRefresh}
+              colors={[OnboardingColors.accent]}
+              tintColor={OnboardingColors.accent}
+            />
+          }
         >
           {/* Header with Logo and Business Image */}
           <View style={styles.headerContainer}>
             <View style={styles.logoRow}>
               <Image
                 source={{
-                  uri: "https://via.placeholder.com/50x50/8A63D2/FFFFFF?text=B",
+                  uri: businessDetails?.businessImage || "https://via.placeholder.com/50x50/8A63D2/FFFFFF?text=B",
                 }}
                 style={styles.businessImage}
               />
@@ -168,9 +183,12 @@ export default function HomeScreen() {
                 style={styles.logoText}
                 darkColor={OnboardingColors.logoText}
               >
-                XanPay
+                {businessDetails?.businessName || "XanPay"}
               </ThemedText>
             </View>
+            {isLoading && (
+              <ActivityIndicator size="small" color={OnboardingColors.accent} />
+            )}
           </View>
 
           {/* Balance Card */}
@@ -187,9 +205,16 @@ export default function HomeScreen() {
                     {selectedCurrency.symbol}
                   </ThemedText>
                   <ThemedText style={styles.balanceAmount}>
-                    {selectedCurrency.balance}
+                    {businessDetails?.userBalance?.toFixed(2) || "0.00"}
                   </ThemedText>
                 </View>
+                {error && (
+                  <TouchableOpacity onPress={refreshBusinessDetails} style={styles.errorContainer}>
+                    <ThemedText style={styles.errorText}>
+                      Tap to retry
+                    </ThemedText>
+                  </TouchableOpacity>
+                )}
               </View>
               <TouchableOpacity
                 style={styles.currencySelector}
@@ -265,19 +290,32 @@ export default function HomeScreen() {
 
           {/* Transactions List */}
           <View style={styles.transactionsContainer}>
-            <ThemedText
-              style={styles.transactionsTitle}
-              darkColor={OnboardingColors.text}
-            >
-              Recent Transactions
-            </ThemedText>
-            <FlatList
-              data={mockTransactions}
-              renderItem={renderTransaction}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
+            <View style={styles.transactionsHeader}>
+              <ThemedText
+                style={styles.transactionsTitle}
+                darkColor={OnboardingColors.text}
+              >
+                Recent Transactions
+              </ThemedText>
+              {transactionsLoading && (
+                <ActivityIndicator size="small" color={OnboardingColors.accent} />
+              )}
+            </View>
+            {transactions.length > 0 ? (
+              <FlatList
+                data={transactions.slice(0, 10)} // Show only recent 10 transactions
+                renderItem={renderTransaction}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                showsVerticalScrollIndicator={false}
+              />
+            ) : (
+              <View style={styles.emptyTransactions}>
+                <ThemedText style={styles.emptyTransactionsText}>
+                  No transactions yet
+                </ThemedText>
+              </View>
+            )}
           </View>
         </ScrollView>
 
@@ -460,10 +498,25 @@ const styles = StyleSheet.create({
     flex: 1,
     marginBottom: 100,
   },
+  transactionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   transactionsTitle: {
     fontSize: 20,
     fontFamily: "Clash",
-    marginBottom: 16,
+  },
+  emptyTransactions: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyTransactionsText: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    color: OnboardingColors.text,
+    opacity: 0.6,
   },
   transactionItem: {
     flexDirection: "row",
@@ -529,5 +582,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Clash",
     fontWeight: "500",
+  },
+  errorContainer: {
+    marginTop: 4,
+  },
+  errorText: {
+    fontSize: 12,
+    fontFamily: "Clash",
+    color: "rgba(255, 255, 255, 0.8)",
+    textDecorationLine: "underline",
   },
 });

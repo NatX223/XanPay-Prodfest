@@ -9,6 +9,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { useAppState } from '@/hooks/useAppState';
 import { OnboardingColors } from '@/constants/Colors';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { BusinessProvider } from '@/contexts/BusinessContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -34,21 +35,23 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          {onboardingCompleted ? (
-            // Main app navigation
-            <>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="+not-found" />
-            </>
-          ) : (
-            // Onboarding navigation
-            <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
-          )}
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <BusinessProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack>
+            {onboardingCompleted ? (
+              // Main app navigation
+              <>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="+not-found" />
+              </>
+            ) : (
+              // Onboarding navigation
+              <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+            )}
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </BusinessProvider>
     </AuthProvider>
   );
 }
