@@ -1,12 +1,12 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform } from 'react-native';
+import { Tabs } from "expo-router";
+import React from "react";
+import { Platform } from "react-native";
 
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { HapticTab } from "@/components/HapticTab";
+import { IconSymbol } from "@/components/ui/IconSymbol";
+import TabBarBackground from "@/components/ui/TabBarBackground";
+import { OnboardingColors } from "@/constants/Colors";
+import { useColorScheme } from "@/hooks/useColorScheme";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -14,30 +14,71 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: OnboardingColors.accent,
+        tabBarInactiveTintColor: OnboardingColors.text,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
-          },
-          default: {},
-        }),
-      }}>
+        tabBarStyle: {
+          backgroundColor: OnboardingColors.background,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(0,0,0,0.1)',
+          elevation: 8,
+          shadowOpacity: 0.1,
+          shadowOffset: { width: 0, height: -2 },
+          shadowRadius: 4,
+          height: 80,
+          paddingBottom: 20,
+          paddingTop: 10,
+          ...Platform.select({
+            ios: {
+              position: "absolute",
+            },
+            default: {},
+          }),
+        },
+        tabBarLabelStyle: {
+          fontFamily: "Clash",
+          fontSize: 11,
+          fontWeight: "500",
+          marginTop: 4,
+        },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: "Home",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="house" color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="products"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: "Products",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="cube" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="invoices"
+        options={{
+          title: "Invoices",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="doc.text" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="dashboard"
+        options={{
+          title: "Dashboard",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="chart.bar" color={color} />
+          ),
         }}
       />
     </Tabs>

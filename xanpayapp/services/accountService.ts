@@ -7,8 +7,7 @@ export interface CreateAccountRequest {
 
 export interface CreateAccountResponse {
   success: boolean;
-  user?: any;
-  error?: string;
+  token: string;
 }
 
 export class AccountService {
@@ -46,7 +45,8 @@ export class AccountService {
       }
 
       const result = await response.json();
-      return result;
+      const token = result.token;
+      return { success: true, token };
     } catch (error) {
       console.error('Account creation error:', error);
       

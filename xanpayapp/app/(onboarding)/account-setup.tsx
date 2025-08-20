@@ -4,10 +4,12 @@ import {
   SignUpButton,
 } from "@/components/account-setup";
 import { WelcomeText } from "@/components/welcome/WelcomeText";
+import { auth } from "@/config/firebase";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import { AccountService, ImageUploadService } from "@/services";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
+import { signInWithCustomToken } from "firebase/auth";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
@@ -157,8 +159,12 @@ export default function AccountSetupScreen() {
       const accountResponse = await AccountService.createAccount(accountData);
 
       if (!accountResponse.success) {
-        throw new Error(accountResponse.error || "Account creation failed");
+        throw new Error("Account creation failed");
       }
+
+      await signInWithCustomToken(auth, accountResponse.token).catch((error) => {
+        throw new Error(`Authentication failed: ${error.message}`);
+      });
 
       // Step 3: Complete onboarding and navigate to main app
       await completeOnboarding();

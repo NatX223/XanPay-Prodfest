@@ -1,75 +1,533 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState } from "react";
+import {
+  StyleSheet,
+  View,
+  SafeAreaView,
+  TouchableOpacity,
+  ScrollView,
+  Dimensions,
+  Modal,
+  FlatList,
+} from "react-native";
+import { Image } from "expo-image";
+import { ThemedView } from "@/components/ThemedView";
+import { ThemedText } from "@/components/ThemedText";
+import { IconSymbol } from "@/components/ui/IconSymbol";
+import { OnboardingColors } from "@/constants/Colors";
+import ReceiveModal from "@/components/modals/ReceiveModal";
+import SendModal from "@/components/modals/SendModal";
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
+interface Transaction {
+  id: string;
+  type: "Purchase" | "Deposit" | "Spend";
+  amount: string;
+  description: string;
+  date: string;
+}
+
+const mockTransactions: Transaction[] = [
+  {
+    id: "1",
+    type: "Deposit",
+    amount: "+$500.00",
+    description: "wallet Deposit",
+    date: "2 hours ago",
+  },
+  {
+    id: "2",
+    type: "Spend",
+    amount: "-$45.99",
+    description: "Salaries",
+    date: "12 july",
+  },
+  {
+    id: "3",
+    type: "Purchase",
+    amount: "+$129.99",
+    description: "Online Store",
+    date: "11 june",
+  },
+  {
+    id: "4",
+    type: "Deposit",
+    amount: "+$1,200.00",
+    description: "Salary",
+    date: "11 june",
+  },
+  {
+    id: "5",
+    type: "Spend",
+    amount: "-$25.50",
+    description: "Lunch",
+    date: "11 june",
+  },
+];
+
+const currencies = [
+  { code: "USDC", symbol: "$", balance: "2,450.75" },
+  { code: "NGN", symbol: "₦", balance: "1,850,000.00" },
+  { code: "USD", symbol: "$", balance: "2,450.75" },
+];
 
 export default function HomeScreen() {
+  const [selectedCurrency, setSelectedCurrency] = useState(currencies[0]);
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+
+  const getTransactionIcon = (type: string) => {
+    switch (type) {
+      case "Deposit":
+        return "arrow.down";
+      case "Spend":
+        return "arrow.up.right";
+      case "Purchase":
+        return "cart";
+      default:
+        return "circle";
+    }
+  };
+
+  const getTransactionColor = (type: string) => {
+    switch (type) {
+      case "Deposit":
+        return "#10B981";
+      case "Spend":
+        return "#EF4444";
+      case "Purchase":
+        return "#F59E0B";
+      default:
+        return OnboardingColors.text;
+    }
+  };
+
+  const renderTransaction = ({ item }: { item: Transaction }) => (
+    <View style={styles.transactionItem}>
+      <View style={styles.transactionLeft}>
+        <View
+          style={[
+            styles.transactionIconContainer,
+            { backgroundColor: getTransactionColor(item.type) + "20" },
+          ]}
+        >
+          <IconSymbol
+            name={getTransactionIcon(item.type)}
+            size={20}
+            color={getTransactionColor(item.type)}
+          />
+        </View>
+        <View style={styles.transactionDetails}>
+          <ThemedText
+            style={styles.transactionDescription}
+            darkColor={OnboardingColors.text}
+          >
+            {item.type}
+          </ThemedText>
+          <ThemedText
+            style={styles.transactionInfo}
+            darkColor={OnboardingColors.text}
+          >
+            {`${item.date} • ${item.description}`}
+          </ThemedText>
+        </View>
+      </View>
+      <ThemedText
+        style={[
+          styles.transactionAmount,
+          { color: "#010805" },
+        ]}
+      >
+        {item.amount}
+      </ThemedText>
+    </View>
+  );
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <SafeAreaView style={styles.safeArea}>
+      <ThemedView
+        style={styles.container}
+        lightColor={OnboardingColors.background}
+        darkColor={OnboardingColors.background}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+        >
+          {/* Header with Logo and Business Image */}
+          <View style={styles.headerContainer}>
+            <View style={styles.logoRow}>
+              <Image
+                source={{
+                  uri: "https://via.placeholder.com/50x50/8A63D2/FFFFFF?text=B",
+                }}
+                style={styles.businessImage}
+              />
+              <ThemedText
+                style={styles.logoText}
+                darkColor={OnboardingColors.logoText}
+              >
+                XanPay
+              </ThemedText>
+            </View>
+          </View>
+
+          {/* Balance Card */}
+          <View style={styles.balanceCard}>
+            <View style={styles.balanceHeader}>
+              <View style={styles.balanceLeft}>
+                <ThemedText style={styles.balanceLabel} lightColor="#FFFFFF">
+                  Total Balance
+                </ThemedText>
+                <View style={styles.balanceRow}>
+                  <ThemedText
+                    style={styles.currencySymbol}
+                  >
+                    {selectedCurrency.symbol}
+                  </ThemedText>
+                  <ThemedText style={styles.balanceAmount}>
+                    {selectedCurrency.balance}
+                  </ThemedText>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.currencySelector}
+                onPress={() => setShowCurrencyModal(true)}
+              >
+                <ThemedText style={styles.currencyCode} lightColor="#FFFFFF">
+                  {selectedCurrency.code}
+                </ThemedText>
+                <IconSymbol name="chevron.down" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Action Icons */}
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => setShowReceiveModal(true)}
+              accessibilityLabel="Receive payment"
+              accessibilityHint="Opens options to receive payments via invoice or crypto address"
+              accessibilityRole="button"
+            >
+              <View style={styles.actionIconContainer}>
+                <IconSymbol
+                  name="plus"
+                  size={24}
+                  color={OnboardingColors.accent}
+                />
+              </View>
+              <ThemedText
+                style={styles.actionLabel}
+              >
+                Receive
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => setShowSendModal(true)}
+              accessibilityLabel="Send payment"
+              accessibilityHint="Opens options to send payments via invoice or crypto address"
+              accessibilityRole="button"
+            >
+              <View style={styles.actionIconContainer}>
+                <IconSymbol
+                  name="arrow.up.right"
+                  size={24}
+                  color={OnboardingColors.accent}
+                />
+              </View>
+              <ThemedText
+                style={styles.actionLabel}
+              >
+                Send
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton}>
+              <View style={styles.actionIconContainer}>
+                <IconSymbol
+                  name="qrcode"
+                  size={24}
+                  color={OnboardingColors.accent}
+                />
+              </View>
+              <ThemedText
+                style={styles.actionLabel}
+              >
+                Scan
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+
+          {/* Transactions List */}
+          <View style={styles.transactionsContainer}>
+            <ThemedText
+              style={styles.transactionsTitle}
+              darkColor={OnboardingColors.text}
+            >
+              Recent Transactions
+            </ThemedText>
+            <FlatList
+              data={mockTransactions}
+              renderItem={renderTransaction}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        </ScrollView>
+
+        {/* Currency Selection Modal */}
+        <Modal
+          visible={showCurrencyModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowCurrencyModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowCurrencyModal(false)}
+          >
+            <View style={styles.currencyModal}>
+              {currencies.map((currency) => (
+                <TouchableOpacity
+                  key={currency.code}
+                  style={styles.currencyOption}
+                  onPress={() => {
+                    setSelectedCurrency(currency);
+                    setShowCurrencyModal(false);
+                  }}
+                >
+                  <ThemedText
+                    style={styles.currencyOptionText}
+                    lightColor={OnboardingColors.text}
+                  >
+                    {currency.code} - {currency.symbol}
+                    {currency.balance}
+                  </ThemedText>
+                  {selectedCurrency.code === currency.code && (
+                    <IconSymbol
+                      name="checkmark"
+                      size={20}
+                      color={OnboardingColors.accent}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Receive Modal */}
+        <ReceiveModal
+          isVisible={showReceiveModal}
+          onClose={() => setShowReceiveModal(false)}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
+
+        {/* Send Modal */}
+        <SendModal
+          isVisible={showSendModal}
+          onClose={() => setShowSendModal(false)}
+        />
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  safeArea: {
+    flex: 1,
+    backgroundColor: OnboardingColors.background,
   },
-  stepContainer: {
-    gap: 8,
+  container: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  headerContainer: {
+    marginTop: 20,
+    marginBottom: 24,
+  },
+  logoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  businessImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 16,
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: "bold",
+    fontFamily: "Clash",
+  },
+  balanceCard: {
+    width: "100%",
+    height: screenHeight * 0.20,
+    backgroundColor: OnboardingColors.accent,
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 32,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  balanceHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flex: 1,
+  },
+  balanceLeft: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  balanceLabel: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    opacity: 0.8,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  balanceRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  currencySymbol: {
+    fontSize: 30,
+    fontFamily: "Clash",
+    marginRight: 4,
+    color: "#fbfafc"
+  },
+  balanceAmount: {
+    fontSize: 30,
+    fontFamily: "Clash",
+    color: "#fbfafc"
+  },
+  currencySelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  currencyCode: {
+    fontSize: 14,
+    fontFamily: "Clash",
+    fontWeight: "600",
+    marginRight: 4,
+  },
+  actionsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: 32,
+  },
+  actionButton: {
+    alignItems: "center",
+  },
+  actionIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 25,
+    borderColor: "#d0bce0",
+    backgroundColor: "#f6f2f7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionLabel: {
+    fontSize: 14,
+    fontFamily: "Clash",
+    fontWeight: "500",
+    color: "#8a63d2"
+  },
+  transactionsContainer: {
+    flex: 1,
+    marginBottom: 100,
+  },
+  transactionsTitle: {
+    fontSize: 20,
+    fontFamily: "Clash",
+    marginBottom: 16,
+  },
+  transactionItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0, 0, 0, 0.1)",
+  },
+  transactionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  transactionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  transactionDetails: {
+    flex: 1,
+  },
+  transactionDescription: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    fontWeight: "400",
+    marginBottom: 2,
+  },
+  transactionInfo: {
+    fontSize: 14,
+    fontFamily: "Clash",
+    opacity: 0.6,
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontFamily: "Clash",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  currencyModal: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 20,
+    width: screenWidth * 0.8,
+    maxWidth: 300,
+  },
+  currencyOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0, 0, 0, 0.1)",
+  },
+  currencyOptionText: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    fontWeight: "500",
   },
 });
