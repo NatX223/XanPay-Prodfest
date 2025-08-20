@@ -24,3 +24,30 @@ export const Colors = {
     tabIconSelected: tintColorDark,
   },
 };
+
+export const OnboardingColors = {
+  background: '#f6f2f7',
+  text: '#0a0a0a',
+  logoText: '#FFFFFF',
+  headlineText: '#FFFFFF',
+  accent: '#8A63D2',
+  secondaryAccent: '#FF8C42',
+  buttonText: '#FFFFFF',
+};
+
+export const WelcomeColors = {
+  gradientStart: '#0F0F10',
+  gradientEnd: '#1A1B1F',
+  purpleWave: '#A855F7',
+  greenBlob: '#10B981',
+  white: '#FFFFFF',
+  whiteGlow: 'rgba(255, 255, 255, 0.2)',
+  whiteTransparent: 'rgba(255, 255, 255, 0.75)',
+  glassBackground: 'rgba(255, 255, 255, 0.08)',
+  glassBorder: 'rgba(255, 255, 255, 0.18)',
+  glassHighlight: 'rgba(255, 255, 255, 0.3)',
+  glassReflection: 'rgba(255, 255, 255, 0.02)',
+  glassShadow: 'rgba(0, 0, 0, 0.5)',
+  buttonBlack: '#000000',
+  buttonGreen: '#10B981',
+};
