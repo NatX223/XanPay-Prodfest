@@ -8,6 +8,7 @@ const routes = require('./routes/index');
 const { ethers } = require("ethers");
 const { db, auth } = require('./utils/firebase');
 const { verifyFirebaseToken } = require('./middleware/auth');
+const { v4: uuidv4 } = require('uuid');
 
 dotenv.config();
 
@@ -31,6 +32,96 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
+// Function to process invoice payment
+async function processInvoicePayment(invoiceCode, amountPaid, merchantId, currency = 'USDC') {
+  try {
+    // Get the invoice
+    const invoiceRef = db.collection("merchants").doc(merchantId).collection("invoices").doc(invoiceCode);
+    const invoiceDoc = await invoiceRef.get();
+
+    if (!invoiceDoc.exists) {
+      throw new Error("Invoice not found");
+    }
+
+    const invoiceData = invoiceDoc.data();
+
+    // Check if invoice is already paid
+    if (invoiceData.paid) {
+      throw new Error("Invoice is already paid");
+    }
+
+    // Check if invoice is still valid
+    if (invoiceData.validUntil && Date.now() > invoiceData.validUntil) {
+      throw new Error("Invoice has expired");
+    }
+
+    // Get product details to calculate total amount
+    const productRef = db.collection("merchants").doc(merchantId).collection("products").doc(invoiceData.product);
+    const productDoc = await productRef.get();
+
+    if (!productDoc.exists) {
+      throw new Error("Product not found");
+    }
+
+    const productData = productDoc.data();
+    const totalAmount = productData.price * invoiceData.quantity;
+
+    // Check if payment amount is sufficient
+    if (amountPaid < totalAmount) {
+      throw new Error(`Insufficient payment. Required: ${totalAmount}, Received: ${amountPaid}`);
+    }
+
+    // Check if there's enough product quantity
+    if (productData.quantity < invoiceData.quantity) {
+      throw new Error(`Insufficient product quantity. Available: ${productData.quantity}, Required: ${invoiceData.quantity}`);
+    }
+
+    // Update product quantity (reduce by invoice quantity)
+    const newQuantity = productData.quantity - invoiceData.quantity;
+    await productRef.update({
+      quantity: newQuantity,
+      updatedAt: Date.now()
+    });
+
+    // Update invoice to paid
+    await invoiceRef.update({
+      paid: true,
+      paidAt: Date.now(),
+      amountPaid: amountPaid,
+      updatedAt: Date.now()
+    });
+
+    // Add transaction record for purchase
+    const transactionId = uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase();
+    await db.collection("merchants").doc(merchantId).collection("transactions").doc(transactionId).set({
+      type: "Purchase",
+      amount: amountPaid,
+      currency: currency,
+      invoiceCode: invoiceCode,
+      productName: productData.productName,
+      quantity: invoiceData.quantity,
+      createdAt: Date.now()
+    });
+
+    return {
+      success: true,
+      message: "Invoice payment processed successfully",
+      invoiceCode,
+      amountPaid,
+      totalAmount,
+      productQuantityRemaining: newQuantity,
+      transactionId
+    };
+
+  } catch (error) {
+    console.error("Error processing invoice payment:", error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
 
 app.post("/createAccount", async (req, res) => {
   const { email, password, businessName, businessImage } = req.body;
@@ -90,7 +181,7 @@ app.post("/login", verifyFirebaseToken, async (req, res) => {
       const uuid = req.uid;
   
       // fetch merchant document
-      const merchantRef = db.collection("merchant").doc(uuid);
+      const merchantRef = db.collection("merchants").doc(uuid);
       const merchantDoc = await merchantRef.get();
   
       if (!merchantDoc.exists) {
@@ -147,7 +238,7 @@ app.post("createInvoice", async (req, res) => {
   
     const uid = decoded.uid;
   
-    const merchantRef = db.collection("merchant").doc(uid);
+    const merchantRef = db.collection("merchants").doc(uid);
     const merchantDoc = await merchantRef.get();
 
     if (!merchantDoc.exists) {
@@ -162,20 +253,23 @@ app.post("createInvoice", async (req, res) => {
       businessImage: merchant.businessImage,
       product: req.body.product,
       quantity: req.body.quantity,
+      paid: false,
       createdAt: Date.now(),
       validUntil: Date.now() + 7 * 24 * 60 * 60 * 1000, // optional 7-day validity
     };
   
-    await db.collection("merchants").doc(uid).collection("invoices").add(invoice);
+    // Generate unique invoice code using UUID (first 8 characters for readability)
+    const invoiceCode = uuidv4().replace(/-/g, '').substring(0, 8).toUpperCase();
+    await db.collection("merchants").doc(uid).collection("invoices").doc(invoiceCode).set(invoice);
   
-    res.json({ success: true, invoice });
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(401).json({ error: "Unauthorized" });
   }
 });
 
-app.post("addProduct", async (req, res) => {
+app.post("/addProduct", async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.split("Bearer ")[1];
@@ -187,7 +281,7 @@ app.post("addProduct", async (req, res) => {
   
     const uid = decoded.uid;
   
-    const merchantRef = db.collection("merchant").doc(uid);
+    const merchantRef = db.collection("merchants").doc(uid);
     const merchantDoc = await merchantRef.get();
 
     if (!merchantDoc.exists) {
@@ -196,7 +290,7 @@ app.post("addProduct", async (req, res) => {
 
     // add product
     const product = {
-      productName: req.body.businessName,
+      productName: req.body.productName,
       productImage: req.body.productImage,
       quantity: req.body.quantity,
       price: req.body.price,
@@ -204,11 +298,276 @@ app.post("addProduct", async (req, res) => {
       createdAt: Date.now(),
     };
   
-    await db.collection("merchants").doc(uid).collection("products").add(product);
+    const productRef = await db.collection("merchants").doc(uid).collection("products").add(product);
   
-    res.json({ success: true, invoice });
+    res.json({ success: true, productId: productRef.id, product });
   } catch (err) {
     console.error(err);
-    res.status(401).json({ error: "Unauthorized" });
+    res.status(500).json({ error: "Failed to add product" });
+  }
+});
+
+app.put("/updateProduct/:productId", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.split("Bearer ")[1];
+  
+    if (!token) return res.status(401).json({ error: "No token" });
+  
+    // Verify token
+    const decoded = await auth.verifyIdToken(token);
+    const uid = decoded.uid;
+    const { productId } = req.params;
+    const updates = req.body.updates; // Array of {field, value} objects
+  
+    if (!productId) {
+      return res.status(400).json({ error: "Product ID is required" });
+    }
+
+    if (!updates || !Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({ error: "Updates array is required" });
+    }
+
+    // Verify merchant exists
+    const merchantRef = db.collection("merchants").doc(uid);
+    const merchantDoc = await merchantRef.get();
+
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    // Get product reference
+    const productRef = db.collection("merchants").doc(uid).collection("products").doc(productId);
+    const productDoc = await productRef.get();
+
+    if (!productDoc.exists) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
+    // Build update object from updates array
+    const updateData = {};
+    const allowedFields = ['productName', 'productImage', 'quantity', 'price', 'currency'];
+    
+    for (const update of updates) {
+      const { field, value } = update;
+      
+      if (!allowedFields.includes(field)) {
+        return res.status(400).json({ error: `Invalid field: ${field}. Allowed fields: ${allowedFields.join(', ')}` });
+      }
+      
+      updateData[field] = value;
+    }
+
+    // Add updatedAt timestamp
+    updateData.updatedAt = Date.now();
+
+    // Update the product
+    await productRef.update(updateData);
+
+    // Get updated product data
+    const updatedProductDoc = await productRef.get();
+    const updatedProduct = updatedProductDoc.data();
+
+    res.json({ 
+      success: true, 
+      message: "Product updated successfully",
+      productId,
+      updatedFields: Object.keys(updateData),
+      product: updatedProduct
+    });
+  } catch (err) {
+    console.error("Error updating product:", err);
+    res.status(500).json({ error: "Failed to update product" });
+  }
+});
+
+app.get("/products", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.split("Bearer ")[1];
+  
+    if (!token) return res.status(401).json({ error: "No token" });
+  
+    // Verify token
+    const decoded = await auth.verifyIdToken(token);
+    const uid = decoded.uid;
+
+    // Verify merchant exists
+    const merchantRef = db.collection("merchants").doc(uid);
+    const merchantDoc = await merchantRef.get();
+
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    // Get all products for this merchant
+    const productsSnapshot = await db.collection("merchants").doc(uid).collection("products").get();
+
+    if (productsSnapshot.empty) {
+      return res.json({ 
+        success: true, 
+        message: "No products found",
+        products: []
+      });
+    }
+
+    // Map products with document IDs
+    const products = productsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({ 
+      success: true, 
+      message: "Products retrieved successfully",
+      count: products.length,
+      products
+    });
+  } catch (err) {
+    console.error("Error getting products:", err);
+    res.status(500).json({ error: "Failed to retrieve products" });
+  }
+});
+
+app.get("/invoice/:invoiceCode", async (req, res) => {
+  try {
+    const { invoiceCode } = req.params;
+
+    if (!invoiceCode) {
+      return res.status(400).json({ error: "Invoice code is required" });
+    }
+
+    // Search for the invoice across all merchants
+    const merchantsSnapshot = await db.collection("merchants").get();
+    
+    let invoiceData = null;
+    let merchantUid = null;
+
+    // Find the invoice in any merchant's collection
+    for (const merchantDoc of merchantsSnapshot.docs) {
+      const invoiceRef = db.collection("merchants").doc(merchantDoc.id).collection("invoices").doc(invoiceCode);
+      const invoiceDoc = await invoiceRef.get();
+      
+      if (invoiceDoc.exists) {
+        invoiceData = invoiceDoc.data();
+        merchantUid = merchantDoc.id;
+        break;
+      }
+    }
+
+    if (!invoiceData) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    // Get product details if product ID exists
+    let productDetails = null;
+    if (invoiceData.product && merchantUid) {
+      const productRef = db.collection("merchants").doc(merchantUid).collection("products").doc(invoiceData.product);
+      const productDoc = await productRef.get();
+      
+      if (productDoc.exists) {
+        const productData = productDoc.data();
+        productDetails = {
+          id: productDoc.id,
+          productName: productData.productName,
+          productImage: productData.productImage,
+          price: productData.price,
+          currency: productData.currency
+        };
+      }
+    }
+
+    // Construct response with invoice and product details
+    const response = {
+      success: true,
+      invoice: {
+        invoiceCode,
+        businessName: invoiceData.businessName,
+        businessImage: invoiceData.businessImage,
+        quantity: invoiceData.quantity,
+        paid: invoiceData.paid || false,
+        createdAt: invoiceData.createdAt,
+        validUntil: invoiceData.validUntil,
+        product: productDetails
+      }
+    };
+
+    res.json(response);
+  } catch (err) {
+    console.error("Error getting invoice:", err);
+    res.status(500).json({ error: "Failed to retrieve invoice" });
+  }
+});
+
+app.post('/webhook/deposit', async (req, res) => {
+  try {
+    const { event, data } = req.body;
+
+    if (event !== 'deposit.success') {
+      return res.sendStatus(200);
+    }
+
+    // Extract deposit details
+    const {
+      recipientAddress,
+      amount,
+      currency,
+      hash,
+      note
+    } = data;
+
+    // Lookup merchant using recipientAddress
+    let userDoc;
+    let merchantId;
+    if (recipientAddress) {
+      const merchantsSnapshot = await db.collection('merchants').where('userAddress', '==', recipientAddress).get();
+      if (!merchantsSnapshot.empty) {
+        const merchantDoc = merchantsSnapshot.docs[0];
+        userDoc = merchantDoc.data();
+        merchantId = merchantDoc.id;
+      }
+    }
+
+    if (!userDoc) {
+      console.warn('No user found for recipient address:', recipientAddress);
+      return res.sendStatus(200);
+    }
+
+    // Check if note exists as an invoice in the merchant's invoices collection
+    let isInvoicePayment = false;
+    if (note && note.trim()) {
+      const invoiceRef = db.collection("merchants").doc(merchantId).collection("invoices").doc(note.trim());
+      const invoiceDoc = await invoiceRef.get();
+      isInvoicePayment = invoiceDoc.exists;
+    }
+
+    if (isInvoicePayment) {
+      // Process as invoice payment
+      const result = await processInvoicePayment(note.trim(), parseFloat(amount), merchantId, currency);
+      
+      if (result.success) {
+        console.log('Invoice payment processed successfully:', result);
+      } else {
+        console.error('Invoice payment failed:', result.error);
+      }
+    } else {
+      // Process as regular deposit - add to transaction history
+      const transactionId = uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase();
+      await db.collection("merchants").doc(merchantId).collection("transactions").doc(transactionId).set({
+        type: "Deposit",
+        amount: parseFloat(amount),
+        currency: currency,
+        note: note || null,
+        hash: hash,
+        createdAt: Date.now()
+      });
+
+      console.log('Deposit transaction recorded:', transactionId);
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Error handling webhook:', err);
+    res.sendStatus(500);
   }
 });
