@@ -166,6 +166,7 @@ app.post("/createAccount", async (req, res) => {
       businessName,
       businessImage,
       userAddress,
+      addressId: response.data?.data?.id, // Store the address ID from BlockRadar
       password, // TODO: In production, hash this password using bcrypt before storing
       createdAt: Date.now(),
     });
@@ -643,6 +644,52 @@ app.post('/webhook/deposit', async (req, res) => {
   }
 });
 
+app.post('/updateBankDetails', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.split("Bearer ")[1];
+
+    if (!token) return res.status(401).json({ error: "No token" });
+
+    // Verify token
+    const decoded = await auth.verifyIdToken(token);
+    const uid = decoded.uid;
+
+    const { bank, accountNum, accountName } = req.body;
+
+    // Validate required fields
+    if (!bank || !accountNum || !accountName) {
+      return res.status(400).json({ 
+        error: "All bank details are required: bank, accountNum, accountName" 
+      });
+    }
+
+    // Verify merchant exists
+    const merchantRef = db.collection("merchants").doc(uid);
+    const merchantDoc = await merchantRef.get();
+
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    // Update bank details
+    await merchantRef.update({
+      bank,
+      accountNum,
+      accountName,
+      updatedAt: Date.now()
+    });
+
+    res.json({
+      success: true,
+      message: "Bank details updated successfully"
+    });
+  } catch (err) {
+    console.error("Error updating bank details:", err);
+    res.status(500).json({ error: "Failed to update bank details" });
+  }
+});
+
 app.get('/transactions', async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
@@ -794,29 +841,47 @@ app.post('/withdrawFiat', async (req, res) => {
     const decoded = await auth.verifyIdToken(token);
     const uid = decoded.uid;
 
+    const masterWalletId = process.env.MASTER_WALLET_ID;
+    const transactionId = uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase();
+
     // Verify merchant exists
     const merchantRef = db.collection("merchants").doc(uid);
     const merchantDoc = await merchantRef.get();
-    const merchantId = merchantDoc.id;
 
     if (!merchantDoc.exists) {
       return res.status(404).json({ error: "Merchant not found" });
     }
 
+    const merchantId = merchantDoc.id;
     const merchant = merchantDoc.data();
     const merchantAddress = merchant.userAddress;
     const merchantName = merchant.businessName;
     const merchantAddressId = merchant.addressId;
 
-    const transactionId = uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase();
+    // Check if merchant has bank details
+    if (!merchant.bank || !merchant.accountNum || !merchant.accountName) {
+      return res.status(400).json({ 
+        error: "Bank details not configured. Please update your bank information first." 
+      });
+    }
 
-    const rate = await fetchRate('USDC', req.body.amount, 'NGN', 'base');
-    // create order
+    // Check if addressId exists
+    if (!merchantAddressId) {
+      return res.status(400).json({ 
+        error: "Address ID not found. Please contact support." 
+      });
+    }
+
+    // Get rate from Paycrest
+    const rateResponse = await fetchRate('USDC', req.body.amount, 'NGN', 'base');
+    console.log("Rate response:", rateResponse);
+    
+    // create order with proper structure
     const orderData = {
-      amount: req.body.amount,
+      amount: parseFloat(req.body.amount),
       token: 'USDC',
       network: 'base',
-      rate: rate,
+      rate: rateResponse, // Include the rate from the rate API
       recipient: {
         institution: merchant.bank,
         accountIdentifier: merchant.accountNum,
@@ -824,23 +889,25 @@ app.post('/withdrawFiat', async (req, res) => {
         currency: 'NGN',
         memo: `Settlement for XanPay merchant - ${merchantName}`
       },
-      reference: `merchant ${transactionId}`,
+      reference: `merchant-${transactionId}`,
       returnAddress: merchantAddress
     };
+
+    console.log("Creating Paycrest order with data:", JSON.stringify(orderData, null, 2));
 
     const response = await axios.post(
       "https://api.paycrest.io/v1/sender/orders",
       orderData,
       {
         headers: {
-          "API-Key": process.env.PAYCREST_API_KEY, // keep this in .env
+          "API-Key": process.env.PAYCREST_API_KEY,
           "Content-Type": "application/json",
         },
       }
     );
 
     const order = response.data;
-    console.log("Order created:", order);
+    console.log("Order created successfully:", order);
 
     await merchantRef.collection("fiat_withdrawals").add(order);
 
@@ -902,56 +969,45 @@ app.post('/withdrawFiat', async (req, res) => {
   } catch (error) {
     console.error("Error processing fiat withdrawal:", error);
     
-    // Log error details for monitoring
-    const errorDetails = {
-      merchantId: uid,
-      transactionId: transactionId || 'N/A',
-      error: error.message,
-      timestamp: Date.now(),
-      endpoint: '/withdrawFiat'
-    };
-
-    // Record failed transaction if we got far enough to have a transactionId
-    if (transactionId) {
-      try {
-        await db.collection("merchants").doc(uid).collection("transactions").doc(transactionId).set({
-          type: "Fiat",
-          amount: req.body.amount,
-          currency: "NGN",
-          reference: transactionId,
-          status: "failed",
-          error: error.message,
-          createdAt: Date.now()
-        });
-      } catch (dbError) {
-        console.error("Failed to record error transaction:", dbError);
-      }
-    }
-
     // Return appropriate error response
     if (error.response) {
-      // API error response
+      // API error response - log the full response for debugging
+      console.error("API Error Response:", {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+      
+      // Check for specific Paycrest API errors
+      const apiData = error.response.data;
+      if (apiData?.data?.field === 'Token' && apiData?.data?.message?.includes('not configured')) {
+        return res.status(503).json({
+          success: false,
+          error: "Service configuration issue",
+          details: "The payment service is not properly configured for USDC transactions. Please contact support.",
+          code: "TOKEN_NOT_CONFIGURED"
+        });
+      }
+      
       res.status(error.response.status || 500).json({
         success: false,
         error: "Payment processing failed",
-        details: error.response.data?.message || error.message,
-        transactionId: transactionId || null
+        details: error.response.data?.message || error.response.data || error.message,
+        apiError: error.response.data
       });
     } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
       // Network connectivity issues
       res.status(503).json({
         success: false,
         error: "Service temporarily unavailable",
-        details: "Unable to connect to payment service",
-        transactionId: transactionId || null
+        details: "Unable to connect to payment service"
       });
     } else {
       // General server error
       res.status(500).json({
         success: false,
         error: "Internal server error",
-        details: error.message,
-        transactionId: transactionId || null
+        details: error.message
       });
     }
   }
