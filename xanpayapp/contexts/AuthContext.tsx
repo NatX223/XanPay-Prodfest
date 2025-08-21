@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { authService, AuthUser } from '@/services/authService';
+import { AccountService } from '@/services/accountService';
 
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -42,6 +44,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      setIsLoading(true);
+      
+      // Call our custom signin endpoint
+      const signInResponse = await AccountService.signIn({ email, password });
+      
+      // Use the custom token to sign in with Firebase
+      const user = await authService.signInWithCustomToken(signInResponse.token);
+      setUser(user);
+    } catch (error) {
+      console.error('Email sign in failed:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const signOut = async () => {
     try {
       setIsLoading(true);
@@ -59,6 +79,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     isLoading,
     signInWithGoogle,
+    signInWithEmail,
     signOut,
     isAuthenticated: !!user,
   };

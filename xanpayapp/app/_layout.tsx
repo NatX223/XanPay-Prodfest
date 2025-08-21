@@ -39,8 +39,9 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
             {onboardingCompleted ? (
-              // Main app navigation
+              // Main app navigation (will handle auth internally)
               <>
+                <Stack.Screen name="signin" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="+not-found" />
               </>

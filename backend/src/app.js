@@ -164,6 +164,8 @@ app.post("/createAccount", async (req, res) => {
       businessName,
       businessImage,
       userAddress,
+      password, // TODO: In production, hash this password using bcrypt before storing
+      createdAt: Date.now(),
     });
 
     const token = await auth.createCustomToken(userRecord.uid);
@@ -176,6 +178,57 @@ app.post("/createAccount", async (req, res) => {
   } catch (error) {
     console.error("Error creating user:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/signin", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    // Get user record by email
+    let userRecord;
+    try {
+      userRecord = await auth.getUserByEmail(email);
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') {
+        return res.status(404).json({ error: "No account found with this email address" });
+      }
+      throw error;
+    }
+
+    // Get the merchant document to check stored password
+    const merchantRef = db.collection("merchants").doc(userRecord.uid);
+    const merchantDoc = await merchantRef.get();
+
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant account not found" });
+    }
+
+    // Create custom token for the user
+    const customToken = await auth.createCustomToken(userRecord.uid);
+
+    res.json({
+      success: true,
+      message: "Sign in successful",
+      token: customToken,
+      user: {
+        uid: userRecord.uid,
+        email: userRecord.email,
+        displayName: userRecord.displayName,
+        photoURL: userRecord.photoURL
+      }
+    });
+
+  } catch (error) {
+    console.error("Error in /signin:", error);
+    return res.status(500).json({
+      error: "Internal server error",
+      details: error.message,
+    });
   }
 });
 
@@ -207,7 +260,7 @@ app.post("/login", async (req, res) => {
       
       const options = {
         method: "GET",
-        url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddress}/balance`,
+        url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddress}/balance?assetId=fa813091-a293-4828-a2ab-b1f6c22f194f`,
         headers: {
           "x-api-key": process.env.BLOCKRADAR_API_KEY
         }

@@ -1,18 +1,9 @@
-import {
-  BusinessImageUpload,
-  EnhancedFormInput,
-  SignUpButton,
-} from "@/components/account-setup";
+import { EnhancedFormInput, SignUpButton } from "@/components/account-setup";
 import { WelcomeText } from "@/components/welcome/WelcomeText";
-import { auth } from "@/config/firebase";
-import { useOnboarding } from "@/contexts/OnboardingContext";
-import { AccountService, ImageUploadService } from "@/services";
-import * as ImagePicker from "expo-image-picker";
-import { router } from "expo-router";
-import { signInWithCustomToken } from "firebase/auth";
+import { useAuth } from "@/contexts/AuthContext";
+import { Redirect } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -28,21 +19,20 @@ import Animated, {
 } from "react-native-reanimated";
 
 interface FormValidation {
-  businessName: { isValid: boolean; error?: string };
   email: { isValid: boolean; error?: string };
   password: { isValid: boolean; error?: string };
 }
 
-export default function AccountSetupScreen() {
-  const { completeOnboarding } = useOnboarding();
-  const [businessName, setBusinessName] = useState("");
+export default function SignInScreen() {
+  const {
+    signInWithEmail,
+    isAuthenticated,
+    isLoading: authLoading,
+  } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [businessImage, setBusinessImage] =
-    useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [validation, setValidation] = useState<FormValidation>({
-    businessName: { isValid: false },
     email: { isValid: false },
     password: { isValid: false },
   });
@@ -56,6 +46,22 @@ export default function AccountSetupScreen() {
   const buttonOpacity = useSharedValue(0);
   const buttonTranslateY = useSharedValue(15);
 
+  // Animated styles for staggered animations
+  const headlineAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: headlineOpacity.value,
+    transform: [{ translateY: headlineTranslateY.value }],
+  }));
+
+  const formAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: formOpacity.value,
+    transform: [{ translateY: formTranslateY.value }],
+  }));
+
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: buttonOpacity.value,
+    transform: [{ translateY: buttonTranslateY.value }],
+  }));
+
   useEffect(() => {
     // Staggered animations with 600ms duration as per requirements
     headlineOpacity.value = withDelay(300, withTiming(1, { duration: 600 }));
@@ -68,11 +74,12 @@ export default function AccountSetupScreen() {
     buttonTranslateY.value = withDelay(700, withTiming(0, { duration: 600 }));
   }, []);
 
-  const isFormValid =
-    validation.businessName.isValid &&
-    validation.email.isValid &&
-    validation.password.isValid &&
-    businessImage !== null; // Require business image
+  // Redirect to main app if already authenticated
+  if (!authLoading && isAuthenticated) {
+    return <Redirect href="/(tabs)" />;
+  }
+
+  const isFormValid = validation.email.isValid && validation.password.isValid;
 
   const handleValidation = (
     field: keyof FormValidation,
@@ -90,27 +97,13 @@ export default function AccountSetupScreen() {
     }
   };
 
-  const handleImageSelected = (image: ImagePicker.ImagePickerAsset) => {
-    setBusinessImage(image);
-  };
-
-  const handleImageError = (error: string) => {
-    Alert.alert("Image Upload Error", error);
-  };
-
   // Clear submit error when user starts typing
-  const handleInputChange = (
-    field: "businessName" | "email" | "password",
-    value: string
-  ) => {
+  const handleInputChange = (field: "email" | "password", value: string) => {
     if (submitError) {
       setSubmitError(null);
     }
 
     switch (field) {
-      case "businessName":
-        setBusinessName(value);
-        break;
       case "email":
         setEmail(value);
         break;
@@ -120,120 +113,50 @@ export default function AccountSetupScreen() {
     }
   };
 
-  const handleSignUp = async () => {
+  const handleSignIn = async () => {
     if (!isFormValid) return;
 
     setIsLoading(true);
     setSubmitError(null);
 
     try {
-      let imageUrl = "";
-
-      // Step 1: Upload business image if provided
-      if (businessImage) {
-        try {
-          const uploadResponse = await ImageUploadService.uploadImage(
-            businessImage
-          );
-
-          imageUrl = uploadResponse.imageUrl;
-        } catch (uploadError) {
-          throw new Error(
-            `Image upload failed: ${
-              uploadError instanceof Error
-                ? uploadError.message
-                : "Unknown error"
-            }`
-          );
-        }
-      }
-
-      // Step 2: Create account with image URL
-      const accountData = {
-        email,
-        password,
-        businessName,
-        businessImage: imageUrl,
-      };
-
-      const accountResponse = await AccountService.createAccount(accountData);
-
-      if (!accountResponse.success) {
-        throw new Error("Account creation failed");
-      }
-
-      await signInWithCustomToken(auth, accountResponse.token).catch(
-        (error) => {
-          throw new Error(`Authentication failed: ${error.message}`);
-        }
-      );
-
-      // Step 3: Complete onboarding and navigate to main app
-      await completeOnboarding();
-      router.replace("/(tabs)");
+      await signInWithEmail(email, password);
+      // Navigation will be handled automatically by the redirect above
     } catch (error: any) {
-      let errorMessage = "Failed to create account. Please try again.";
+      let errorMessage = "Failed to sign in. Please try again.";
 
-      // Handle specific error types
-      if (
-        error.message.includes("Network request failed") ||
-        error.message.includes("fetch")
-      ) {
-        errorMessage =
-          "Network error. Please check your connection and try again.";
-        Alert.alert("Network Error", errorMessage);
-      } else if (error.message.includes("Image upload failed")) {
-        errorMessage = error.message;
-        Alert.alert("Image Upload Error", errorMessage);
-      } else if (
-        error.message.includes("email") &&
-        error.message.includes("exists")
-      ) {
-        errorMessage =
-          "This email is already registered. Please use a different email.";
-        // Update email field validation to show this error
+      // Handle specific error messages from our custom backend
+      if (error.message.includes("No account found with this email address")) {
+        errorMessage = "No account found with this email address.";
         setValidation((prev) => ({
           ...prev,
           email: { isValid: false, error: errorMessage },
         }));
-      } else if (
-        error.message.includes("HTTP error") ||
-        error.message.includes("Server")
-      ) {
-        errorMessage = "Server error occurred. Please try again later.";
-        Alert.alert("Server Error", errorMessage);
-      } else {
-        // Generic error handling
+      } else if (error.message.includes("Incorrect password")) {
+        errorMessage = "Incorrect password. Please try again.";
+        setValidation((prev) => ({
+          ...prev,
+          password: { isValid: false, error: errorMessage },
+        }));
+      } else if (error.message.includes("Email and password are required")) {
+        errorMessage = "Please fill in all required fields.";
         setSubmitError(errorMessage);
-      }
-
-      // Set submit error for display (except for email validation errors which are shown in field)
-      if (
-        !error.message.includes("email") ||
-        !error.message.includes("exists")
+      } else if (
+        error.message.includes("Network request failed") ||
+        error.message.includes("Network error")
       ) {
+        errorMessage =
+          "Network error. Please check your connection and try again.";
+        setSubmitError(errorMessage);
+      } else {
+        // For other errors, show the message from the backend or a generic message
+        errorMessage = error.message || "Failed to sign in. Please try again.";
         setSubmitError(errorMessage);
       }
     } finally {
       setIsLoading(false);
     }
   };
-
-  // Animated styles for staggered animations
-  const headlineAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: headlineOpacity.value,
-    transform: [{ translateY: headlineTranslateY.value }],
-  }));
-
-  const formAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: formOpacity.value,
-    transform: [{ translateY: formTranslateY.value }],
-  }));
-
-  const buttonAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: buttonOpacity.value,
-    transform: [{ translateY: buttonTranslateY.value }],
-  }));
 
   return (
     <SafeAreaView style={styles.container}>
@@ -255,30 +178,11 @@ export default function AccountSetupScreen() {
                 style={styles.headline}
                 color="#000000"
               >
-                Create Your Account
+                Sign in
               </WelcomeText>
             </Animated.View>
 
             <Animated.View style={[styles.formContainer, formAnimatedStyle]}>
-              <BusinessImageUpload
-                onImageSelected={handleImageSelected}
-                onError={handleImageError}
-              />
-
-              <EnhancedFormInput
-                label="Business Name"
-                type="text"
-                value={businessName}
-                onChangeText={(value: string) =>
-                  handleInputChange("businessName", value)
-                }
-                placeholder="Enter your business name"
-                error={validation.businessName.error}
-                onValidation={(isValid: boolean, error?: string) =>
-                  handleValidation("businessName", isValid, error)
-                }
-              />
-
               <EnhancedFormInput
                 label="Email Address"
                 type="email"
@@ -300,7 +204,7 @@ export default function AccountSetupScreen() {
                 onChangeText={(value: string) =>
                   handleInputChange("password", value)
                 }
-                placeholder="Create a secure password"
+                placeholder="Enter your password"
                 error={validation.password.error}
                 onValidation={(isValid: boolean, error?: string) =>
                   handleValidation("password", isValid, error)
@@ -324,11 +228,11 @@ export default function AccountSetupScreen() {
 
         <Animated.View style={[styles.buttonContainer, buttonAnimatedStyle]}>
           <SignUpButton
-            onPress={handleSignUp}
+            onPress={handleSignIn}
             disabled={!isFormValid}
             isLoading={isLoading}
-            title="Sign Up"
-            loadingTitle="Creating Account..."
+            title="Sign In"
+            loadingTitle="Signing In..."
           />
         </Animated.View>
       </KeyboardAvoidingView>
@@ -341,20 +245,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  logoContainer: {
-    position: "absolute",
-    top: 100,
-    left: 24,
-    zIndex: 10,
-  },
-  logoText: {
-    fontSize: 34,
-    fontFamily: "Clash",
-    color: "#FFFFFF",
-    textShadowColor: "rgba(255, 255, 255, 0.3)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
   keyboardAvoidingView: {
     flex: 1,
   },
@@ -363,19 +253,19 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingTop: 160, // Account for logo space
+    paddingTop: 160,
   },
   content: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 32,
-    minHeight: 600, // Ensure minimum height for proper centering
+    minHeight: 600,
   },
   headline: {
     marginBottom: 96,
     marginTop: -80,
-    textShadowColor: "transparent", // Remove white text shadow on white background
+    textShadowColor: "transparent",
   },
   formContainer: {
     width: "100%",

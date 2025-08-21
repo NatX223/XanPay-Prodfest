@@ -4,6 +4,8 @@ import {
   User,
   UserCredential,
   signInWithCredential,
+  signInWithEmailAndPassword,
+  signInWithCustomToken,
   GoogleAuthProvider,
   OAuthCredential
 } from 'firebase/auth';
@@ -64,6 +66,28 @@ class AuthService {
       return this.formatUser(result.user);
     } catch (error) {
       console.error('OAuth credential sign in error:', error);
+      throw error;
+    }
+  }
+
+  // Sign in with email and password (direct Firebase auth)
+  async signInWithEmail(email: string, password: string): Promise<AuthUser | null> {
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      return this.formatUser(result.user);
+    } catch (error) {
+      console.error('Email sign in error:', error);
+      throw error;
+    }
+  }
+
+  // Sign in with custom token
+  async signInWithCustomToken(token: string): Promise<AuthUser | null> {
+    try {
+      const result = await signInWithCustomToken(auth, token);
+      return this.formatUser(result.user);
+    } catch (error) {
+      console.error('Custom token sign in error:', error);
       throw error;
     }
   }

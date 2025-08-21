@@ -13,7 +13,7 @@ export interface LoginResponse {
 }
 
 export class BusinessService {
-  private static readonly BASE_URL = 'https://80ae40f0d7c6.ngrok-free.app';
+  private static readonly BASE_URL = 'https://794a43f86b65.ngrok-free.app';
   private static readonly LOGIN_ENDPOINT = '/login';
 
   static async getUserBusinessDetails(): Promise<BusinessDetails> {
@@ -86,7 +86,7 @@ export interface TransactionsResponse {
 }
 
 export class TransactionService {
-  private static readonly BASE_URL = 'https://80ae40f0d7c6.ngrok-free.app ';
+  private static readonly BASE_URL = 'https://794a43f86b65.ngrok-free.app';
   private static readonly TRANSACTIONS_ENDPOINT = '/transactions';
 
   static async getUserTransactions(): Promise<Transaction[]> {

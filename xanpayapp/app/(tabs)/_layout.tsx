@@ -1,15 +1,38 @@
-import { Tabs } from "expo-router";
+import { Tabs, Redirect } from "expo-router";
 import React from "react";
-import { Platform } from "react-native";
+import { Platform, View, ActivityIndicator } from "react-native";
 
 import { HapticTab } from "@/components/HapticTab";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import TabBarBackground from "@/components/ui/TabBarBackground";
 import { OnboardingColors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Show loading while checking authentication
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: OnboardingColors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={OnboardingColors.accent} />
+      </View>
+    );
+  }
+
+  // Redirect to sign-in if not authenticated
+  if (!isAuthenticated) {
+    return <Redirect href="/signin" />;
+  }
 
   return (
     <Tabs
@@ -22,7 +45,7 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: OnboardingColors.background,
           borderTopWidth: 1,
-          borderTopColor: 'rgba(0,0,0,0.1)',
+          borderTopColor: "rgba(0,0,0,0.1)",
           elevation: 8,
           shadowOpacity: 0.1,
           shadowOffset: { width: 0, height: -2 },
