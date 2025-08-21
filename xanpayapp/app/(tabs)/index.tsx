@@ -36,8 +36,9 @@ export default function HomeScreen() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
-  
-  const { businessDetails, isLoading, error, refreshBusinessDetails } = useBusiness();
+
+  const { businessDetails, isLoading, error, refreshBusinessDetails } =
+    useBusiness();
 
   // Fetch transactions when business details are loaded
   useEffect(() => {
@@ -52,17 +53,14 @@ export default function HomeScreen() {
       const userTransactions = await TransactionService.getUserTransactions();
       setTransactions(userTransactions);
     } catch (error) {
-      console.error('Error fetching transactions:', error);
+      console.error("Error fetching transactions:", error);
     } finally {
       setTransactionsLoading(false);
     }
   };
 
   const handleRefresh = async () => {
-    await Promise.all([
-      refreshBusinessDetails(),
-      fetchTransactions()
-    ]);
+    await Promise.all([refreshBusinessDetails(), fetchTransactions()]);
   };
 
   const getTransactionIcon = (type: string) => {
@@ -94,19 +92,24 @@ export default function HomeScreen() {
   const formatTransactionDate = (timestamp: number) => {
     const date = new Date(timestamp);
     const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
+
     if (diffInHours < 1) {
-      return 'Just now';
+      return "Just now";
     } else if (diffInHours < 24) {
       return `${diffInHours} hours ago`;
     } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
     }
   };
 
   const formatTransactionAmount = (amount: number, type: string) => {
-    const prefix = type === 'Deposit' || type === 'Purchase' ? '+' : '-';
+    const prefix = type === "Deposit" || type === "Purchase" ? "+" : "-";
     return `${prefix}$${amount.toFixed(2)}`;
   };
 
@@ -136,7 +139,9 @@ export default function HomeScreen() {
             style={styles.transactionInfo}
             darkColor={OnboardingColors.text}
           >
-            {`${formatTransactionDate(item.createdAt)} • ${item.productName || item.note || 'Transaction'}`}
+            {`${formatTransactionDate(item.createdAt)} • ${
+              item.productName || item.note || "Transaction"
+            }`}
           </ThemedText>
         </View>
       </View>
@@ -175,7 +180,9 @@ export default function HomeScreen() {
             <View style={styles.logoRow}>
               <Image
                 source={{
-                  uri: businessDetails?.businessImage || "https://via.placeholder.com/50x50/8A63D2/FFFFFF?text=B",
+                  uri:
+                    businessDetails?.businessImage ||
+                    "https://via.placeholder.com/50x50/8A63D2/FFFFFF?text=B",
                 }}
                 style={styles.businessImage}
               />
@@ -199,9 +206,7 @@ export default function HomeScreen() {
                   Total Balance
                 </ThemedText>
                 <View style={styles.balanceRow}>
-                  <ThemedText
-                    style={styles.currencySymbol}
-                  >
+                  <ThemedText style={styles.currencySymbol}>
                     {selectedCurrency.symbol}
                   </ThemedText>
                   <ThemedText style={styles.balanceAmount}>
@@ -209,7 +214,10 @@ export default function HomeScreen() {
                   </ThemedText>
                 </View>
                 {error && (
-                  <TouchableOpacity onPress={refreshBusinessDetails} style={styles.errorContainer}>
+                  <TouchableOpacity
+                    onPress={refreshBusinessDetails}
+                    style={styles.errorContainer}
+                  >
                     <ThemedText style={styles.errorText}>
                       Tap to retry
                     </ThemedText>
@@ -230,7 +238,7 @@ export default function HomeScreen() {
 
           {/* Action Icons */}
           <View style={styles.actionsContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.actionButton}
               onPress={() => setShowReceiveModal(true)}
               accessibilityLabel="Receive payment"
@@ -244,14 +252,10 @@ export default function HomeScreen() {
                   color={OnboardingColors.accent}
                 />
               </View>
-              <ThemedText
-                style={styles.actionLabel}
-              >
-                Receive
-              </ThemedText>
+              <ThemedText style={styles.actionLabel}>Receive</ThemedText>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.actionButton}
               onPress={() => setShowSendModal(true)}
               accessibilityLabel="Send payment"
@@ -265,26 +269,18 @@ export default function HomeScreen() {
                   color={OnboardingColors.accent}
                 />
               </View>
-              <ThemedText
-                style={styles.actionLabel}
-              >
-                Send
-              </ThemedText>
+              <ThemedText style={styles.actionLabel}>Send</ThemedText>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.actionButton}>
               <View style={styles.actionIconContainer}>
                 <IconSymbol
-                  name="qrcode"
+                  name="banknote"
                   size={24}
                   color={OnboardingColors.accent}
                 />
               </View>
-              <ThemedText
-                style={styles.actionLabel}
-              >
-                Scan
-              </ThemedText>
+              <ThemedText style={styles.actionLabel}>Withdraw</ThemedText>
             </TouchableOpacity>
           </View>
 
@@ -298,7 +294,10 @@ export default function HomeScreen() {
                 Recent Transactions
               </ThemedText>
               {transactionsLoading && (
-                <ActivityIndicator size="small" color={OnboardingColors.accent} />
+                <ActivityIndicator
+                  size="small"
+                  color={OnboardingColors.accent}
+                />
               )}
             </View>
             {transactions.length > 0 ? (
@@ -390,7 +389,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   headerContainer: {
-    marginTop: 20,
+    marginTop: 12,
     marginBottom: 24,
   },
   logoRow: {
@@ -404,13 +403,12 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   logoText: {
-    fontSize: 28,
-    fontWeight: "bold",
+    fontSize: 25,
     fontFamily: "Clash",
   },
   balanceCard: {
     width: "100%",
-    height: screenHeight * 0.20,
+    height: screenHeight * 0.2,
     backgroundColor: OnboardingColors.accent,
     borderRadius: 20,
     padding: 24,
@@ -445,12 +443,12 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontFamily: "Clash",
     marginRight: 4,
-    color: "#fbfafc"
+    color: "#fbfafc",
   },
   balanceAmount: {
     fontSize: 30,
     fontFamily: "Clash",
-    color: "#fbfafc"
+    color: "#fbfafc",
   },
   currencySelector: {
     flexDirection: "row",
@@ -492,16 +490,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Clash",
     fontWeight: "500",
-    color: "#8a63d2"
+    color: "#8a63d2",
   },
   transactionsContainer: {
     flex: 1,
     marginBottom: 100,
   },
   transactionsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
   transactionsTitle: {
@@ -510,7 +508,7 @@ const styles = StyleSheet.create({
   },
   emptyTransactions: {
     paddingVertical: 40,
-    alignItems: 'center',
+    alignItems: "center",
   },
   emptyTransactionsText: {
     fontSize: 16,

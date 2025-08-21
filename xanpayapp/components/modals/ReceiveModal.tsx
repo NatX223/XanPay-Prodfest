@@ -7,6 +7,9 @@ import {
   Dimensions,
   StyleSheet,
   Pressable,
+  TextInput,
+  Alert,
+  ScrollView,
 } from "react-native";
 import { router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
@@ -14,6 +17,7 @@ import QRCode from "react-native-qrcode-svg";
 import { ThemedText } from "@/components/ThemedText";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { OnboardingColors } from "@/constants/Colors";
+import { InvoiceService, Product } from '@/services/invoiceService';
 
 const { height: screenHeight } = Dimensions.get("window");
 
@@ -22,7 +26,7 @@ interface ReceiveModalProps {
   onClose: () => void;
 }
 
-type ViewType = "options" | "funds";
+type ViewType = "options" | "funds" | "invoice";
 
 export default function ReceiveModal({
   isVisible,
@@ -76,8 +80,10 @@ export default function ReceiveModal({
               transform: [{ translateY: slideAnim }],
               height:
                 currentView === "options"
-                  ? screenHeight * 0.32
-                  : screenHeight * 0.6,
+                  ? screenHeight * 0.3
+                  : currentView === "invoice"
+                  ? screenHeight * 0.8
+                  : screenHeight * 0.55,
             },
           ]}
         >
@@ -107,7 +113,7 @@ export default function ReceiveModal({
                     <IconSymbol name="chevron.left" size={22} color="#8a63d2" />
                   </TouchableOpacity>
                   <ThemedText style={styles.title} lightColor="#FFFFFF">
-                    Funds
+                    {currentView === "invoice" ? "Create Invoice" : "Funds"}
                   </ThemedText>
                   <TouchableOpacity
                     onPress={handleClose}
@@ -125,12 +131,11 @@ export default function ReceiveModal({
             <View style={styles.contentContainer}>
               {currentView === "options" ? (
                 <ReceiveOptionsView
-                  onInvoicePress={() => {
-                    handleClose();
-                    router.push("/(tabs)/dashboard");
-                  }}
+                  onInvoicePress={() => setCurrentView("invoice")}
                   onFundsPress={() => setCurrentView("funds")}
                 />
+              ) : currentView === "invoice" ? (
+                <InvoiceView onBack={() => setCurrentView("options")} onClose={handleClose} />
               ) : (
                 <FundsView onBack={() => setCurrentView("options")} />
               )}
@@ -220,6 +225,202 @@ function ReceiveOption({
 // Static crypto address constant
 const STATIC_CRYPTO_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
 
+// Invoice View Component
+interface InvoiceViewProps {
+  onBack: () => void;
+  onClose: () => void;
+}
+
+function InvoiceView({ onBack, onClose }: InvoiceViewProps) {
+  const [productId, setProductId] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const products = await InvoiceService.getProducts();
+      setProducts(products);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      Alert.alert("Error", error instanceof Error ? error.message : "Failed to load products");
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  const handleCreateInvoice = async () => {
+    if (!productId.trim()) {
+      Alert.alert("Error", "Please enter a Product ID");
+      return;
+    }
+
+    if (!quantity.trim() || parseInt(quantity) <= 0) {
+      Alert.alert("Error", "Please enter a valid quantity");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await InvoiceService.createInvoice({
+        product: productId.trim(),
+        quantity: parseInt(quantity),
+      });
+
+      if (result.success) {
+        Alert.alert(
+          "Success", 
+          "Invoice created successfully!",
+          [{ text: "OK", onPress: onClose }]
+        );
+      } else {
+        throw new Error(result.error || 'Failed to create invoice');
+      }
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      Alert.alert("Error", error instanceof Error ? error.message : "Failed to create invoice");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const selectedProduct = products.find(p => p.id === productId);
+
+  return (
+    <ScrollView style={styles.invoiceContainer} showsVerticalScrollIndicator={false}>
+      <View style={styles.formContainer}>
+        {/* Product ID Input */}
+        <View style={styles.inputGroup}>
+          <ThemedText style={styles.inputLabel} darkColor={OnboardingColors.text}>
+            Product ID *
+          </ThemedText>
+          <TextInput
+            style={styles.textInput}
+            value={productId}
+            onChangeText={setProductId}
+            placeholder="Enter product ID"
+            placeholderTextColor="#999"
+            accessibilityLabel="Product ID"
+            accessibilityHint="Enter the ID of the product for this invoice"
+          />
+        </View>
+
+        {/* Quantity Input */}
+        <View style={styles.inputGroup}>
+          <ThemedText style={styles.inputLabel} darkColor={OnboardingColors.text}>
+            Quantity *
+          </ThemedText>
+          <TextInput
+            style={styles.textInput}
+            value={quantity}
+            onChangeText={setQuantity}
+            placeholder="Enter quantity"
+            placeholderTextColor="#999"
+            keyboardType="numeric"
+            accessibilityLabel="Quantity"
+            accessibilityHint="Enter the quantity for this invoice"
+          />
+        </View>
+
+        {/* Product Preview */}
+        {selectedProduct && (
+          <View style={styles.productPreview}>
+            <ThemedText style={styles.previewTitle} darkColor={OnboardingColors.text}>
+              Product Preview
+            </ThemedText>
+            <View style={styles.productCard}>
+              <ThemedText style={styles.productName} darkColor={OnboardingColors.text}>
+                {selectedProduct.productName}
+              </ThemedText>
+              <ThemedText style={styles.productPrice} darkColor={OnboardingColors.text}>
+                ${selectedProduct.price} {selectedProduct.currency}
+              </ThemedText>
+              <ThemedText style={styles.productStock} darkColor={OnboardingColors.text}>
+                Available: {selectedProduct.quantity}
+              </ThemedText>
+              {parseInt(quantity) > 0 && (
+                <ThemedText style={styles.totalPrice} darkColor={OnboardingColors.accent}>
+                  Total: ${(selectedProduct.price * parseInt(quantity || "0")).toFixed(2)}
+                </ThemedText>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Available Products */}
+        {loadingProducts ? (
+          <View style={styles.productsSection}>
+            <ThemedText style={styles.sectionTitle} darkColor={OnboardingColors.text}>
+              Loading Products...
+            </ThemedText>
+          </View>
+        ) : products.length > 0 ? (
+          <View style={styles.productsSection}>
+            <ThemedText style={styles.sectionTitle} darkColor={OnboardingColors.text}>
+              Available Products
+            </ThemedText>
+            {products.slice(0, 3).map((product) => (
+              <TouchableOpacity
+                key={product.id}
+                style={[
+                  styles.productItem,
+                  productId === product.id && styles.selectedProductItem
+                ]}
+                onPress={() => setProductId(product.id)}
+              >
+                <View style={styles.productInfo}>
+                  <ThemedText style={styles.productItemName} darkColor={OnboardingColors.text}>
+                    {product.productName}
+                  </ThemedText>
+                  <ThemedText style={styles.productItemPrice} darkColor={OnboardingColors.text}>
+                    ${product.price} {product.currency}
+                  </ThemedText>
+                </View>
+                <ThemedText style={styles.productId} darkColor="#666">
+                  ID: {product.id}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+            {products.length > 3 && (
+              <ThemedText style={styles.moreProducts} darkColor="#666">
+                +{products.length - 3} more products available
+              </ThemedText>
+            )}
+          </View>
+        ) : (
+          <View style={styles.productsSection}>
+            <ThemedText style={styles.sectionTitle} darkColor={OnboardingColors.text}>
+              No Products Available
+            </ThemedText>
+            <ThemedText style={styles.moreProducts} darkColor="#666">
+              Add products first to create invoices
+            </ThemedText>
+          </View>
+        )}
+
+        {/* Create Invoice Button */}
+        <TouchableOpacity
+          style={[styles.createButton, loading && styles.createButtonDisabled]}
+          onPress={handleCreateInvoice}
+          disabled={loading}
+          accessibilityLabel="Create Invoice"
+          accessibilityHint="Creates an invoice with the specified product and quantity"
+          accessibilityRole="button"
+        >
+          <ThemedText style={styles.createButtonText}>
+            {loading ? "Creating..." : "Create Invoice"}
+          </ThemedText>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+}
+
 // Funds View Component
 interface FundsViewProps {
   onBack: () => void;
@@ -301,7 +502,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   titleContainer: {
-    height: "30%",
+    height: '30%',
     backgroundColor: "#FFFFFF",
     borderTopRightRadius: 18,
     borderTopLeftRadius: 18,
@@ -363,7 +564,7 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
   },
   addressSection: {
-    marginBottom: 40,
+    marginBottom: 60,
   },
   addressLabel: {
     fontSize: 18,
@@ -427,5 +628,144 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 1,
+  },
+  // Invoice View Styles
+  invoiceContainer: {
+    flex: 1,
+  },
+  formContainer: {
+    paddingBottom: 10,
+    
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  textInput: {
+    height: 48,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    fontFamily: "Clash",
+    color: "#333",
+    borderWidth: 1,
+    borderColor: "#e9ecef",
+  },
+  productPreview: {
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: "#f0f8ff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e3f2fd",
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    fontWeight: "600",
+    marginBottom: 12,
+    color: OnboardingColors.accent,
+  },
+  productCard: {
+    backgroundColor: "#ffffff",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e9ecef",
+  },
+  productName: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  productPrice: {
+    fontSize: 14,
+    fontFamily: "Clash",
+    marginBottom: 4,
+  },
+  productStock: {
+    fontSize: 12,
+    fontFamily: "Clash",
+    opacity: 0.7,
+    marginBottom: 8,
+  },
+  totalPrice: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    fontWeight: "600",
+  },
+  productsSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    fontWeight: "600",
+    marginBottom: 12,
+  },
+  productItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#e9ecef",
+  },
+  selectedProductItem: {
+    backgroundColor: "#e8f5e8",
+    borderColor: OnboardingColors.accent,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productItemName: {
+    fontSize: 14,
+    fontFamily: "Clash",
+    fontWeight: "500",
+    marginBottom: 2,
+  },
+  productItemPrice: {
+    fontSize: 12,
+    fontFamily: "Clash",
+    opacity: 0.7,
+  },
+  productId: {
+    fontSize: 10,
+    fontFamily: "Clash",
+    opacity: 0.6,
+  },
+  moreProducts: {
+    fontSize: 12,
+    fontFamily: "Clash",
+    textAlign: "center",
+    fontStyle: "italic",
+    marginTop: 8,
+  },
+  createButton: {
+    backgroundColor: OnboardingColors.accent,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  createButtonDisabled: {
+    backgroundColor: "#ccc",
+  },
+  createButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: "Clash",
+    fontWeight: "600",
   },
 });

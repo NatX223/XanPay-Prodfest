@@ -26,9 +26,9 @@ export const Colors = {
 };
 
 export const OnboardingColors = {
-  background: '#f6f2f7',
+  background: '#FFFFFF',
   text: '#0a0a0a',
-  logoText: '#FFFFFF',
+  logoText: '#000000',
   headlineText: '#FFFFFF',
   accent: '#8A63D2',
   secondaryAccent: '#FF8C42',
