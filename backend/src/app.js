@@ -144,6 +144,8 @@ app.post("/createAccount", async (req, res) => {
         "Content-Type": "application/json",
       },
       data: {
+        disableAutoSweep: "true",
+        enableGaslessWithdraw: "true",
         metadata: {
           description: `${businessName} Wallet`,
           businessName: businessName
