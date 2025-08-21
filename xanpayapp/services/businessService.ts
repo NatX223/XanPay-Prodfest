@@ -13,7 +13,7 @@ export interface LoginResponse {
 }
 
 export class BusinessService {
-  private static readonly BASE_URL = 'https://26eb07f60a19.ngrok-free.app';
+  private static readonly BASE_URL = 'http://xanpay-prodfest-production.up.railway.app';
   private static readonly LOGIN_ENDPOINT = '/login';
 
   static async getUserBusinessDetails(): Promise<BusinessDetails> {
@@ -86,7 +86,7 @@ export interface TransactionsResponse {
 }
 
 export class TransactionService {
-  private static readonly BASE_URL = 'https://26eb07f60a19.ngrok-free.app';
+  private static readonly BASE_URL = 'http://xanpay-prodfest-production.up.railway.app';
   private static readonly TRANSACTIONS_ENDPOINT = '/transactions';
 
   static async getUserTransactions(): Promise<Transaction[]> {
