@@ -118,7 +118,7 @@ export default function DashboardScreen() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `$${amount.toFixed(2)}`;
+    return `$${amount}`;
   };
 
   const formatDate = (timestamp: number) => {

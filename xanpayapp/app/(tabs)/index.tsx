@@ -20,6 +20,7 @@ import { useBusiness } from "@/contexts/BusinessContext";
 import { TransactionService, Transaction } from "@/services/businessService";
 import ReceiveModal from "@/components/modals/ReceiveModal";
 import SendModal from "@/components/modals/SendModal";
+import WithdrawModal from "@/components/modals/WithdrawModal";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -34,6 +35,7 @@ export default function HomeScreen() {
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
 
@@ -110,7 +112,7 @@ export default function HomeScreen() {
 
   const formatTransactionAmount = (amount: number, type: string) => {
     const prefix = type === "Deposit" || type === "Purchase" ? "+" : "-";
-    return `${prefix}$${amount.toFixed(2)}`;
+    return `${prefix}$${amount}`;
   };
 
   const renderTransaction = ({ item }: { item: Transaction }) => (
@@ -140,7 +142,7 @@ export default function HomeScreen() {
             darkColor={OnboardingColors.text}
           >
             {`${formatTransactionDate(item.createdAt)} • ${
-              item.productName || item.note || "Transaction"
+              item.productName || "Transaction"
             }`}
           </ThemedText>
         </View>
@@ -272,7 +274,13 @@ export default function HomeScreen() {
               <ThemedText style={styles.actionLabel}>Send</ThemedText>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setShowWithdrawModal(true)}
+              accessibilityLabel="Withdraw funds"
+              accessibilityHint="Opens the withdraw modal to transfer funds to your bank account"
+              accessibilityRole="button"
+            >
               <View style={styles.actionIconContainer}>
                 <IconSymbol
                   name="banknote"
@@ -370,6 +378,12 @@ export default function HomeScreen() {
         <SendModal
           isVisible={showSendModal}
           onClose={() => setShowSendModal(false)}
+        />
+
+        {/* Withdraw Modal */}
+        <WithdrawModal
+          isVisible={showWithdrawModal}
+          onClose={() => setShowWithdrawModal(false)}
         />
       </ThemedView>
     </SafeAreaView>

@@ -29,7 +29,7 @@ export interface CreateInvoiceResponse {
 }
 
 export class InvoiceService {
-  private static readonly BASE_URL = 'https://275267bbecad.ngrok-free.app';
+  private static readonly BASE_URL = 'https://4ddcaaaa1b75.ngrok-free.app';
 
   static async getProducts(): Promise<Product[]> {
     try {
