@@ -10,14 +10,15 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
-import { router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import QRCode from "react-native-qrcode-svg";
 import { ThemedText } from "@/components/ThemedText";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { OnboardingColors } from "@/constants/Colors";
 import { InvoiceService, Product } from '@/services/invoiceService';
+import { useBusiness } from '@/contexts/BusinessContext';
 
 const { height: screenHeight } = Dimensions.get("window");
 
@@ -222,8 +223,7 @@ function ReceiveOption({
   );
 }
 
-// Static crypto address constant
-const STATIC_CRYPTO_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
+// Dynamic crypto address will be retrieved from BusinessContext
 
 // Invoice View Component
 interface InvoiceViewProps {
@@ -428,10 +428,67 @@ interface FundsViewProps {
 
 function FundsView({ onBack }: FundsViewProps) {
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const { businessDetails, isLoading, error, refreshBusinessDetails } = useBusiness();
 
   const formatAddress = (address: string) => {
+    if (!address) return "";
     return `${address.slice(0, 10)}...${address.slice(-4)}`;
   };
+
+  // Get the wallet address from business details
+  const walletAddress = businessDetails?.userAddress;
+  const isAddressAvailable = walletAddress && walletAddress.trim() !== '';
+
+  // Handle copy functionality
+  const handleCopyAddress = async () => {
+    if (!isAddressAvailable) return;
+    
+    try {
+      await Clipboard.setStringAsync(walletAddress);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy address:", error);
+      Alert.alert("Error", "Failed to copy address to clipboard");
+    }
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <View style={styles.fundsContainer}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={OnboardingColors.accent} />
+          <ThemedText style={styles.loadingText} darkColor={OnboardingColors.text}>
+            Loading wallet address...
+          </ThemedText>
+        </View>
+      </View>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <View style={styles.fundsContainer}>
+        <View style={styles.errorContainer}>
+          <ThemedText style={styles.errorText} darkColor={OnboardingColors.text}>
+            Failed to load wallet address
+          </ThemedText>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={refreshBusinessDetails}
+            accessibilityLabel="Retry loading address"
+            accessibilityRole="button"
+          >
+            <ThemedText style={styles.retryButtonText}>
+              Tap to retry
+            </ThemedText>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.fundsContainer}>
@@ -443,47 +500,64 @@ function FundsView({ onBack }: FundsViewProps) {
           Your Crypto Address
         </ThemedText>
 
-        <View style={styles.addressContainer}>
-          <ThemedText
-            style={styles.addressText}
-            darkColor={OnboardingColors.text}
-          >
-            {formatAddress(STATIC_CRYPTO_ADDRESS)}
-          </ThemedText>
-          <TouchableOpacity
-            style={styles.copyButton}
-            onPress={async () => {
-              try {
-                await Clipboard.setStringAsync(STATIC_CRYPTO_ADDRESS);
-                setCopyFeedback(true);
-                setTimeout(() => setCopyFeedback(false), 2000);
-              } catch (error) {
-                console.error("Failed to copy address:", error);
-                // Could show error feedback here
-              }
-            }}
-            accessibilityLabel={
-              copyFeedback ? "Address copied" : "Copy address"
-            }
-            accessibilityHint="Copies the crypto address to clipboard"
-            accessibilityRole="button"
-          >
-            <ThemedText style={styles.copyButtonText}>
-              {copyFeedback ? "Copied!" : "Copy"}
+        {isAddressAvailable ? (
+          <View style={styles.addressContainer}>
+            <ThemedText
+              style={styles.addressText}
+              darkColor={OnboardingColors.text}
+            >
+              {formatAddress(walletAddress)}
             </ThemedText>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={styles.copyButton}
+              onPress={handleCopyAddress}
+              accessibilityLabel={
+                copyFeedback ? "Address copied" : "Copy address"
+              }
+              accessibilityHint="Copies the crypto address to clipboard"
+              accessibilityRole="button"
+            >
+              <ThemedText style={styles.copyButtonText}>
+                {copyFeedback ? "Copied!" : "Copy"}
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.addressContainer}>
+            <ThemedText
+              style={[styles.addressText, styles.noAddressText]}
+              darkColor={OnboardingColors.text}
+            >
+              Wallet address not available
+            </ThemedText>
+          </View>
+        )}
       </View>
 
       <View style={styles.qrSection}>
-        <View style={styles.qrContainer}>
-          <QRCode
-            value={STATIC_CRYPTO_ADDRESS}
-            size={180}
-            color={OnboardingColors.text}
-            backgroundColor="#FFFFFF"
-          />
-        </View>
+        {isAddressAvailable ? (
+          <View style={styles.qrContainer}>
+            <QRCode
+              value={walletAddress}
+              size={180}
+              color={OnboardingColors.text}
+              backgroundColor="#FFFFFF"
+            />
+          </View>
+        ) : (
+          <View style={styles.qrContainer}>
+            <View style={styles.qrPlaceholder}>
+              <IconSymbol
+                name="qrcode"
+                size={60}
+                color="#ccc"
+              />
+              <ThemedText style={styles.qrPlaceholderText} darkColor="#999">
+                QR code unavailable
+              </ThemedText>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -767,5 +841,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Clash",
     fontWeight: "600",
+  },
+  // Loading and error states
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  errorText: {
+    fontSize: 16,
+    fontFamily: "Clash",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: OnboardingColors.accent,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontFamily: "Clash",
+    fontWeight: "600",
+  },
+  noAddressText: {
+    opacity: 0.6,
+    fontStyle: "italic",
+  },
+  qrPlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+    height: 180,
+  },
+  qrPlaceholderText: {
+    fontSize: 14,
+    fontFamily: "Clash",
+    marginTop: 8,
+    textAlign: "center",
   },
 });

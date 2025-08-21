@@ -262,7 +262,7 @@ app.post("/login", async (req, res) => {
       
       const options = {
         method: "GET",
-        url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddress}/balance?assetId=fa813091-a293-4828-a2ab-b1f6c22f194f`,
+        url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddress}/balance?assetId=d331b003-4970-4d83-a10e-0a5c1d43411c`,
         headers: {
           "x-api-key": process.env.BLOCKRADAR_API_KEY
         }
@@ -284,6 +284,8 @@ app.post("/login", async (req, res) => {
         userBalance: userBalance
       };
   
+      console.log(businessDetails);
+
       return res.json({
         message: "Business Returned",
         business: businessDetails,
@@ -631,10 +633,10 @@ app.post('/webhook/deposit', async (req, res) => {
         createdAt: Date.now()
       });
 
-      console.log('Deposit transaction recorded:', transactionId);
+      console.log('Deposit transaction recorded:', hash);
     }
 
-    res.sendStatus(200);
+    res.send(200);
   } catch (err) {
     console.error('Error handling webhook:', err);
     res.sendStatus(500);

@@ -210,7 +210,7 @@ export default function HomeScreen() {
                     {selectedCurrency.symbol}
                   </ThemedText>
                   <ThemedText style={styles.balanceAmount}>
-                    {businessDetails?.userBalance?.toFixed(2) || "0.00"}
+                    {businessDetails?.userBalance || "0.00"}
                   </ThemedText>
                 </View>
                 {error && (

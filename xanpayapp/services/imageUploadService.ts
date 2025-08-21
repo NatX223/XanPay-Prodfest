@@ -6,7 +6,7 @@ export interface ImageUploadResponse {
 }
 
 export class ImageUploadService {
-  private static readonly BASE_URL = 'https://7266ae4b2b6b.ngrok-free.app';
+  private static readonly BASE_URL = 'https://275267bbecad.ngrok-free.app';
   private static readonly UPLOAD_ENDPOINT = '/api/upload/image';
 
   static async uploadImage(imageAsset: ImagePicker.ImagePickerAsset): Promise<ImageUploadResponse> {
