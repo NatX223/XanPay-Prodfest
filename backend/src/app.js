@@ -712,12 +712,13 @@ app.post('/withdrawCrypto', async (req, res) => {
 
     const merchant = merchantDoc.data();
     const merchantAddress = merchant.userAddress;
+    const merchantAddressId = merchant.addressId;
 
     const transactionId = uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase();
 
     const options = {
       method: "POST",
-      url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddress}/withdraw`,
+      url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddressId}/withdraw`,
       headers: {
         "x-api-key": process.env.BLOCKRADAR_API_KEY,
         "Content-Type": "application/json",
@@ -762,10 +763,196 @@ app.post('/withdrawCrypto', async (req, res) => {
   }
 })
 
+const fetchRate = async (token, amount, currency, network) => {
+  try {
+    const response = await axios.get(
+      `https://api.paycrest.io/v1/rates/${token}/${amount}/${currency}`,
+      {
+        params: { network },
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    return response.data.data; // rate string
+  } catch (error) {
+    throw new Error(
+      `Rate fetch failed: ${error.response?.statusText || error.message}`
+    );
+  }
+};
+
 app.post('/withdrawFiat', async (req, res) => {
   try {
-    
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.split("Bearer ")[1];
+
+    if (!token) return res.status(401).json({ error: "No token" });
+
+    // Verify token
+    const decoded = await auth.verifyIdToken(token);
+    const uid = decoded.uid;
+
+    // Verify merchant exists
+    const merchantRef = db.collection("merchants").doc(uid);
+    const merchantDoc = await merchantRef.get();
+    const merchantId = merchantDoc.id;
+
+    if (!merchantDoc.exists) {
+      return res.status(404).json({ error: "Merchant not found" });
+    }
+
+    const merchant = merchantDoc.data();
+    const merchantAddress = merchant.userAddress;
+    const merchantName = merchant.businessName;
+    const merchantAddressId = merchant.addressId;
+
+    const transactionId = uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase();
+
+    const rate = await fetchRate('USDC', req.body.amount, 'NGN', 'base');
+    // create order
+    const orderData = {
+      amount: req.body.amount,
+      token: 'USDC',
+      network: 'base',
+      rate: rate,
+      recipient: {
+        institution: merchant.bank,
+        accountIdentifier: merchant.accountNum,
+        accountName: merchant.accountName,
+        currency: 'NGN',
+        memo: `Settlement for XanPay merchant - ${merchantName}`
+      },
+      reference: `merchant ${transactionId}`,
+      returnAddress: merchantAddress
+    };
+
+    const response = await axios.post(
+      "https://api.paycrest.io/v1/sender/orders",
+      orderData,
+      {
+        headers: {
+          "API-Key": process.env.PAYCREST_API_KEY, // keep this in .env
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const order = response.data;
+    console.log("Order created:", order);
+
+    await merchantRef.collection("fiat_withdrawals").add(order);
+
+    const sendAmount = Number(req.body.amount) + Number(order.senderFee) + Number(order.transactionFee);
+    const sendAmountString = sendAmount.toString();
+
+    const options = {
+      method: "POST",
+      url: `https://api.blockradar.co/v1/wallets/${masterWalletId}/addresses/${merchantAddressId}/withdraw`,
+      headers: {
+        "x-api-key": process.env.BLOCKRADAR_API_KEY,
+        "Content-Type": "application/json",
+      },
+      data: {
+        assets: [
+          {
+            "address": order.receiveAddress,
+            "amount": sendAmountString,
+            "id": "fa813091-a293-4828-a2ab-b1f6c22f194f",
+            "reference": transactionId
+          }
+        ]
+      },
+    };
+
+    const paymentResponse = await axios(options);
+
+    if (paymentResponse.status === 200) {
+      // Record successful transaction
+      await db.collection("merchants").doc(merchantId).collection("transactions").doc(transactionId).set({
+        type: "Fiat",
+        amount: req.body.amount,
+        currency: "NGN",
+        reference: transactionId,
+        orderId: order.id,
+        status: "initiated",
+        createdAt: Date.now()
+      });
+
+      console.log(`Fiat withdrawal initiated successfully for merchant ${merchantId}:`, {
+        transactionId,
+        amount: req.body.amount,
+        orderId: order.id
+      });
+
+      res.json({
+        success: true,
+        message: "Fiat withdrawal initiated successfully",
+        transactionId: transactionId,
+        orderId: order.id,
+        amount: req.body.amount,
+        currency: "NGN",
+        rate: rate
+      });
+    } else {
+      throw new Error(`Payment API returned status: ${paymentResponse.status}`);
+    }
+
   } catch (error) {
+    console.error("Error processing fiat withdrawal:", error);
     
+    // Log error details for monitoring
+    const errorDetails = {
+      merchantId: uid,
+      transactionId: transactionId || 'N/A',
+      error: error.message,
+      timestamp: Date.now(),
+      endpoint: '/withdrawFiat'
+    };
+
+    // Record failed transaction if we got far enough to have a transactionId
+    if (transactionId) {
+      try {
+        await db.collection("merchants").doc(uid).collection("transactions").doc(transactionId).set({
+          type: "Fiat",
+          amount: req.body.amount,
+          currency: "NGN",
+          reference: transactionId,
+          status: "failed",
+          error: error.message,
+          createdAt: Date.now()
+        });
+      } catch (dbError) {
+        console.error("Failed to record error transaction:", dbError);
+      }
+    }
+
+    // Return appropriate error response
+    if (error.response) {
+      // API error response
+      res.status(error.response.status || 500).json({
+        success: false,
+        error: "Payment processing failed",
+        details: error.response.data?.message || error.message,
+        transactionId: transactionId || null
+      });
+    } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      // Network connectivity issues
+      res.status(503).json({
+        success: false,
+        error: "Service temporarily unavailable",
+        details: "Unable to connect to payment service",
+        transactionId: transactionId || null
+      });
+    } else {
+      // General server error
+      res.status(500).json({
+        success: false,
+        error: "Internal server error",
+        details: error.message,
+        transactionId: transactionId || null
+      });
+    }
   }
 })

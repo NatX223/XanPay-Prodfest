@@ -43,4 +43,23 @@ This feature enables users to configure their bank account details for fiat sett
 
 ### Requirement 4
 
-**User Story:** As a user, I want my bank information to be stored securely
+**User Story:** As a user, I want my bank information to be stored securely, so that my financial data is protected.
+
+#### Acceptance Criteria
+
+1. WHEN bank details are saved THEN the system SHALL encrypt sensitive information before storage
+2. WHEN displaying saved bank details THEN the system SHALL mask the account number (showing only last 4 digits)
+3. WHEN the user logs out THEN the system SHALL clear any cached bank detail information from memory
+4. WHEN accessing bank details THEN the system SHALL require user authentication
+
+### Requirement 5
+
+**User Story:** As a user, I want clear navigation and feedback when managing my bank details, so that I understand the process and current state.
+
+#### Acceptance Criteria
+
+1. WHEN the user successfully saves bank details THEN the system SHALL display a success confirmation message
+2. WHEN there are validation errors THEN the system SHALL clearly indicate which fields need correction
+3. WHEN the page is loading saved data THEN the system SHALL display a loading indicator
+4. WHEN the user wants to return to the previous screen THEN the system SHALL provide a clear back navigation option
+5. WHEN the form has unsaved changes THEN the system SHALL warn the user before navigating away
