@@ -775,7 +775,7 @@ app.post('/withdrawCrypto', async (req, res) => {
           {
             "address": req.body.recipient,
             "amount": req.body.amount,
-            "id": "fa813091-a293-4828-a2ab-b1f6c22f194f",
+            "id": "d331b003-4970-4d83-a10e-0a5c1d43411c",
             "reference": transactionId
           }
         ]
@@ -908,11 +908,21 @@ app.post('/withdrawFiat', async (req, res) => {
 
     const order = response.data;
     console.log("Order created successfully:", order);
+    
+    // Check if receiveAddress exists in the response
+    const receiveAddress = order.data.receiveAddress;
+    
+    if (!receiveAddress) {
+      console.error("No receive address found in order response:", order);
+      return res.status(400).json({
+        success: false,
+        message: "Failed to get receive address from payment provider"
+      });
+    }
+    
+    console.log("Using receive address:", receiveAddress);
 
     await merchantRef.collection("fiat_withdrawals").add(order);
-
-    const sendAmount = Number(req.body.amount) + Number(order.senderFee) + Number(order.transactionFee);
-    const sendAmountString = sendAmount.toString();
 
     const options = {
       method: "POST",
@@ -924,9 +934,9 @@ app.post('/withdrawFiat', async (req, res) => {
       data: {
         assets: [
           {
-            "address": order.receiveAddress,
-            "amount": sendAmountString,
-            "id": "fa813091-a293-4828-a2ab-b1f6c22f194f",
+            "address": receiveAddress,
+            "amount": req.body.amount,
+            "id": "d331b003-4970-4d83-a10e-0a5c1d43411c",
             "reference": transactionId
           }
         ]
@@ -942,7 +952,7 @@ app.post('/withdrawFiat', async (req, res) => {
         amount: req.body.amount,
         currency: "NGN",
         reference: transactionId,
-        orderId: order.id,
+        orderId: order.data.id,
         status: "initiated",
         createdAt: Date.now()
       });
@@ -950,14 +960,14 @@ app.post('/withdrawFiat', async (req, res) => {
       console.log(`Fiat withdrawal initiated successfully for merchant ${merchantId}:`, {
         transactionId,
         amount: req.body.amount,
-        orderId: order.id
+        orderId: order.data.id
       });
 
       res.json({
         success: true,
         message: "Fiat withdrawal initiated successfully",
         transactionId: transactionId,
-        orderId: order.id,
+        orderId: order.data.id,
         amount: req.body.amount,
         currency: "NGN",
         rate: rate

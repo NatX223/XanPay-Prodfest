@@ -15,7 +15,7 @@ export interface WithdrawFiatResponse {
 }
 
 export class WithdrawService {
-  private static readonly BASE_URL = 'https://4ddcaaaa1b75.ngrok-free.app';
+  private static readonly BASE_URL = 'https://26eb07f60a19.ngrok-free.app';
   private static readonly WITHDRAW_FIAT_ENDPOINT = '/withdrawFiat';
 
   static async withdrawFiat(data: WithdrawFiatRequest): Promise<WithdrawFiatResponse> {
